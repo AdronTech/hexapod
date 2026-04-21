@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../waveshare_servo/Resources/Servo"
+		}
+	],
+	"settings": {}
+}

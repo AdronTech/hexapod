@@ -1,0 +1,14 @@
+{
+  "coxa": {
+    "min_deg": -85,
+    "max_deg": 85
+  },
+  "femur": {
+    "min_deg": -85,
+    "max_deg": 140
+  },
+  "tibia": {
+    "min_deg": -70,
+    "max_deg": 75
+  }
+}
