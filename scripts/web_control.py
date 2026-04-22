@@ -18,9 +18,9 @@ Controller mapping (Xbox / Steam Deck layout):
 
   Pose mode (body sway, feet planted):
   Left  stick X/Y  — body strafe / forward-back
-  Right stick X/Y  — yaw / pitch
+  Right stick X/Y  — roll / pitch
   LT / RT          — body down / up  (analog)
-  LB / RB          — roll left / right  (digital)
+  LB / RB          — yaw left / right  (digital)
 
   Walk mode (tripod / ripple / wave gait):
   Left  stick X/Y  — walk direction (body-relative)
@@ -33,9 +33,9 @@ Controller mapping (Xbox / Steam Deck layout):
   Back (standing)  — enter free mode
   Back (free)      — exit free mode
   Left  stick X/Y  — walk direction (steps only when needed)
-  Right stick X/Y  — turn / pitch
+  Right stick X/Y  — roll / pitch
   LT / RT          — body height
-  LB / RB          — roll left / right  (reach via web UI)
+  LB / RB          — turn left / right  (reach via web UI)
 
   D-pad ↑/↓        — translate speed ±0.5 cm/s
   D-pad ←/→        — rotate speed ±2 °/s
@@ -438,12 +438,10 @@ class ControlThread(threading.Thread):
                 elif standing and free_mode and gait is not None:
                     # --- FREE MODE: reactive stepping + full body pose control ---
                     # Left stick: walk direction (triggers steps when feet drift)
-                    # Right stick X/Y: yaw / pitch  |  LT/RT: height  |  LB/RB: roll
-                    roll_rate = speed_deg / 2.0
+                    # Right stick X/Y: roll / pitch  |  LT/RT: height  |  LB/RB: yaw
                     yaw_rad   = math.radians(gait.body.yaw)
                     body_vx   = -_dead(axes[AX_LSY]) * speed_cm
                     body_vy   = -_dead(axes[AX_LSX]) * speed_cm
-                    omega     = -_dead(axes[AX_RSX]) * speed_deg
                     vx = body_vx * math.cos(yaw_rad) - body_vy * math.sin(yaw_rad)
                     vy = body_vx * math.sin(yaw_rad) + body_vy * math.cos(yaw_rad)
 
@@ -455,7 +453,8 @@ class ControlThread(threading.Thread):
 
                     lb = 1.0 if buttons[BTN_LB] > 0.5 else 0.0
                     rb = 1.0 if buttons[BTN_RB] > 0.5 else 0.0
-                    droll = (lb - rb) * roll_rate * DT
+                    omega = (lb - rb) * speed_deg
+                    droll = _dead(axes[AX_RSX]) * speed_deg * DT
                     if abs(droll) > 1e-9:
                         gait.body_roll = max(-30.0, min(30.0, gait.body_roll + droll))
 
@@ -519,17 +518,19 @@ class ControlThread(threading.Thread):
 
                 elif standing and not walk_mode and not free_mode and pose is not None and feet is not None:
                     # --- POSE MODE: body sway, feet stay planted ---
-                    roll_rate = speed_deg / 2.0
-                    dx     = -_dead(axes[AX_LSY]) * speed_cm  * DT
-                    dy     = -_dead(axes[AX_LSX]) * speed_cm  * DT
+                    yaw_rad   = math.radians(pose.yaw)
+                    body_dx   = -_dead(axes[AX_LSY]) * speed_cm * DT
+                    body_dy   = -_dead(axes[AX_LSX]) * speed_cm * DT
+                    dx = body_dx * math.cos(yaw_rad) - body_dy * math.sin(yaw_rad)
+                    dy = body_dx * math.sin(yaw_rad) + body_dy * math.cos(yaw_rad)
                     lt     =  _dead(buttons[BTN_LT])
                     rt     =  _dead(buttons[BTN_RT])
                     dz     = (rt - lt) * speed_cm * DT
                     lb     = 1.0 if buttons[BTN_LB] > 0.5 else 0.0
                     rb     = 1.0 if buttons[BTN_RB] > 0.5 else 0.0
-                    droll  = (lb - rb) * roll_rate * DT
+                    droll  = _dead(axes[AX_RSX]) * speed_deg * DT
                     dpitch = -_dead(axes[AX_RSY]) * speed_deg * DT
-                    dyaw   = -_dead(axes[AX_RSX]) * speed_deg * DT
+                    dyaw   = (lb - rb) * speed_deg * DT
 
                     if abs(dx)+abs(dy)+abs(dz)+abs(droll)+abs(dpitch)+abs(dyaw) > 1e-9:
                         new_pose = replace(
@@ -868,15 +869,15 @@ HTML = r"""<!DOCTYPE html>
     <tr><td>Back (standing)</td><td>Enter free mode</td><td>Back (free)</td><td>Exit free mode</td></tr>
     <tr><td>Start</td><td>Reset to neutral</td><td></td><td></td></tr>
     <tr><td colspan="4" style="color:#58a6ff;padding-top:0.5rem;font-size:0.75rem">POSE MODE</td></tr>
-    <tr><td>Left stick</td><td>Translate body X/Y</td><td>Right stick</td><td>Yaw / Pitch</td></tr>
-    <tr><td>LT / RT</td><td>Body down / up</td><td>LB / RB</td><td>Roll left / right</td></tr>
+    <tr><td>Left stick</td><td>Translate body X/Y</td><td>Right stick</td><td>Roll / Pitch</td></tr>
+    <tr><td>LT / RT</td><td>Body down / up</td><td>LB / RB</td><td>Yaw left / right</td></tr>
     <tr><td colspan="4" style="color:#58a6ff;padding-top:0.5rem;font-size:0.75rem">WALK MODE (tripod / ripple / wave)</td></tr>
     <tr><td>Left stick</td><td>Walk direction</td><td>Right stick X</td><td>Turn left / right</td></tr>
     <tr><td>LT / RT</td><td>Body height</td><td>LB / RB</td><td>Foot reach in / out</td></tr>
     <tr><td>Back</td><td>Cycle gait (tripod→ripple→wave)</td><td></td><td></td></tr>
     <tr><td colspan="4" style="color:#58a6ff;padding-top:0.5rem;font-size:0.75rem">FREE MODE</td></tr>
-    <tr><td>Left stick</td><td>Walk direction (steps when needed)</td><td>Right stick X</td><td>Turn</td></tr>
-    <tr><td>Right stick Y</td><td>Pitch</td><td>LB / RB</td><td>Roll left / right</td></tr>
+    <tr><td>Left stick</td><td>Walk direction (steps when needed)</td><td>Right stick X</td><td>Roll</td></tr>
+    <tr><td>Right stick Y</td><td>Pitch</td><td>LB / RB</td><td>Turn left / right</td></tr>
     <tr><td>LT / RT</td><td>Body height</td><td></td><td>Reach via web UI</td></tr>
     <tr><td>D-pad ↑/↓</td><td>Speed ±0.5 cm/s</td><td>D-pad ←/→</td><td>Turn rate ±2 °/s</td></tr>
   </table>
