@@ -38,6 +38,16 @@ from hexapod.robot.config import Leg
 TRIPOD_A: tuple[Leg, ...] = (Leg.FRONT_RIGHT, Leg.REAR_RIGHT, Leg.MID_LEFT)
 TRIPOD_B: tuple[Leg, ...] = (Leg.MID_RIGHT,   Leg.REAR_LEFT,  Leg.FRONT_LEFT)
 
+# Adjacency ring for the free gait stability guard
+_LEG_RING: tuple[Leg, ...] = (
+    Leg.FRONT_RIGHT, Leg.MID_RIGHT, Leg.REAR_RIGHT,
+    Leg.REAR_LEFT,   Leg.MID_LEFT,  Leg.FRONT_LEFT,
+)
+_ADJACENT: dict[Leg, frozenset] = {
+    leg: frozenset({_LEG_RING[(i - 1) % 6], _LEG_RING[(i + 1) % 6]})
+    for i, leg in enumerate(_LEG_RING)
+}
+
 _NEUTRAL_REACH = COXA_LEN + FEMUR_LEN   # 17.4 cm from coxa pivot to neutral foot
 
 Foot3D = tuple[float, float, float]
@@ -446,3 +456,140 @@ class WaveGait(_PhasedGait):
             neutral_reach  = neutral_reach,
         )
         self.step_time = step_time
+
+
+# ---------------------------------------------------------------------------
+# Free (event-driven) gait
+# ---------------------------------------------------------------------------
+
+class FreeGait:
+    """
+    Free gait: each leg steps independently when its foot drifts more than
+    `step_threshold` cm from its neutral position in the current body frame.
+
+    At most two non-adjacent legs swing simultaneously, ensuring at least
+    four legs remain grounded at all times.
+    """
+
+    def __init__(
+        self,
+        initial_pose: BodyPose,
+        initial_feet: FootMap,
+        *,
+        step_time: float = 0.40,
+        step_height: float = 4.0,
+        neutral_reach: float = _NEUTRAL_REACH,
+        step_threshold: float = 5.0,
+    ) -> None:
+        self.step_time      = step_time
+        self.step_height    = step_height
+        self.neutral_reach  = neutral_reach
+        self.step_threshold = step_threshold
+
+        self._body       = initial_pose
+        self._foot_world = dict(initial_feet)
+
+        self._swinging:     dict[Leg, bool]  = {leg: False for leg in Leg}
+        self._swing_t:      dict[Leg, float] = {leg: 0.0   for leg in Leg}
+        self._swing_start:  FootMap = {}
+        self._swing_target: FootMap = {}
+
+    @property
+    def body(self) -> BodyPose:
+        return self._body
+
+    @property
+    def body_z(self) -> float:
+        return self._body.z
+
+    @body_z.setter
+    def body_z(self, z: float) -> None:
+        self._body = replace(self._body, z=z)
+
+    @property
+    def feet(self) -> FootMap:
+        return dict(self._foot_world)
+
+    def step(
+        self,
+        vx: float,
+        vy: float,
+        omega_deg: float,
+        dt: float,
+    ) -> tuple[BodyPose, FootMap]:
+        # Advance body pose
+        self._body = replace(
+            self._body,
+            x   = self._body.x   + vx        * dt,
+            y   = self._body.y   + vy        * dt,
+            yaw = self._body.yaw + omega_deg * dt,
+        )
+
+        # Advance in-flight swings
+        for leg in Leg:
+            if not self._swinging[leg]:
+                continue
+            t = min(1.0, self._swing_t[leg] + dt / self.step_time)
+            self._swing_t[leg] = t
+            p0 = self._swing_start[leg]
+            p3 = self._swing_target[leg]
+            self._foot_world[leg] = self._swing_arc(p0, p3, t)
+            if t >= 1.0:
+                self._swinging[leg]   = False
+                self._foot_world[leg] = p3
+
+        # Collect grounded legs that need to step, sorted by largest error first
+        candidates: list[tuple[float, Leg]] = [
+            (self._foot_error(leg), leg)
+            for leg in Leg
+            if not self._swinging[leg] and self._foot_error(leg) > self.step_threshold
+        ]
+        candidates.sort(reverse=True)
+
+        swing_count = sum(1 for s in self._swinging.values() if s)
+        for _, leg in candidates:
+            if swing_count >= 2:
+                break
+            if any(self._swinging[adj] for adj in _ADJACENT[leg]):
+                continue
+            self._swing_start[leg]  = self._foot_world[leg]
+            self._swing_target[leg] = self._swing_target_for(leg, vx, vy, omega_deg)
+            self._swing_t[leg]      = 0.0
+            self._swinging[leg]     = True
+            swing_count += 1
+
+        return self._body, dict(self._foot_world)
+
+    def _foot_error(self, leg: Leg) -> float:
+        nx, ny, _ = self._neutral_foot_world(leg)
+        fx, fy    = self._foot_world[leg][0], self._foot_world[leg][1]
+        return math.hypot(fx - nx, fy - ny)
+
+    def _neutral_foot_world(self, leg: Leg) -> Foot3D:
+        yaw = math.radians(self._body.yaw)
+        cx, cy, _ = corner_pos(leg)
+        corner_angle  = math.atan2(cy, cx)
+        corner_radius = math.hypot(cx, cy)
+        world_corner_angle = yaw + corner_angle
+        wcx = self._body.x + corner_radius * math.cos(world_corner_angle)
+        wcy = self._body.y + corner_radius * math.sin(world_corner_angle)
+        return (
+            wcx + self.neutral_reach * math.cos(world_corner_angle),
+            wcy + self.neutral_reach * math.sin(world_corner_angle),
+            0.0,
+        )
+
+    def _swing_target_for(
+        self, leg: Leg, vx: float, vy: float, omega_deg: float
+    ) -> Foot3D:
+        nx, ny, nz = self._neutral_foot_world(leg)
+        half_t     = self.step_time * 0.5
+        half_omega = math.radians(omega_deg * half_t)
+        rx, ry     = _rotate2d(nx, ny, self._body.x, self._body.y, half_omega)
+        return (rx + vx * half_t, ry + vy * half_t, nz)
+
+    def _swing_arc(self, p0: Foot3D, p3: Foot3D, t: float) -> Foot3D:
+        h  = self.step_height * (4.0 / 3.0)
+        p1 = (p0[0], p0[1], p0[2] + h)
+        p2 = (p3[0], p3[1], p3[2] + h)
+        return _cubic_bezier(p0, p1, p2, p3, t)

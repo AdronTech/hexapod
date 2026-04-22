@@ -22,12 +22,12 @@ Controller mapping (Xbox / Steam Deck layout):
   LT / RT          — body down / up  (analog)
   LB / RB          — roll left / right  (digital)
 
-  Walk mode (tripod / ripple / wave gait):
+  Walk mode (tripod / ripple / wave / free gait):
   Left  stick X/Y  — walk direction (body-relative)
   Right stick X    — turn left / right
   LT / RT          — body height
   LB / RB          — foot reach in / out
-  Back             — cycle gait (tripod → ripple → wave)
+  Back             — cycle gait (tripod → ripple → wave → free)
 
   D-pad ↑/↓        — translate speed ±0.5 cm/s
   D-pad ←/→        — rotate speed ±2 °/s
@@ -48,9 +48,9 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from hexapod.body_ik import BodyPose, body_pose_ik, neutral_foot_body
-from hexapod.gait import RippleGait, TripodGait, WaveGait, _NEUTRAL_REACH
+from hexapod.gait import FreeGait, RippleGait, TripodGait, WaveGait, _NEUTRAL_REACH
 
-GAITS = ["tripod", "ripple", "wave"]
+GAITS = ["tripod", "ripple", "wave", "free"]
 from hexapod.kinematics import COXA_LEN, FEMUR_LEN
 from hexapod.kinematics import IKError, angle_to_tick
 from hexapod.robot.config import Joint, Leg, servo_id
@@ -89,6 +89,7 @@ SPEED_DEG_MIN, SPEED_DEG_MAX, SPEED_DEG_STEP = 2.0, 120.0, 2.0
 HEIGHT_MIN, HEIGHT_MAX = 8.0, 20.0   # cm
 REACH_MIN,  REACH_MAX  = 12.0, 26.0  # cm, range for neutral foot radius
 REACH_RATE_CMS         = 3.0         # cm/s change rate when LB/RB held in walk mode
+FREE_STEP_THRESHOLD    = 5.0         # cm from neutral before free-gait triggers a step
 
 # Storage pose — fallback angles when soft_limits.json is not present
 STORAGE_FEMUR_DEG = 90.0    # raise femur this many degrees above horizontal
@@ -484,6 +485,8 @@ class ControlThread(threading.Thread):
             return RippleGait(pose, feet, **kw)
         if gait_type == "wave":
             return WaveGait(pose, feet, **kw)
+        if gait_type == "free":
+            return FreeGait(pose, feet, **kw, step_threshold=FREE_STEP_THRESHOLD)
         return TripodGait(pose, feet, **kw)
 
     @staticmethod
@@ -765,9 +768,10 @@ HTML = r"""<!DOCTYPE html>
       <button class="gait-btn" id="gait-tripod" onclick="selectGait('tripod')">Tripod</button>
       <button class="gait-btn" id="gait-ripple" onclick="selectGait('ripple')">Ripple</button>
       <button class="gait-btn" id="gait-wave"   onclick="selectGait('wave')">Wave</button>
+      <button class="gait-btn" id="gait-free"   onclick="selectGait('free')">Free</button>
     </div>
     <div style="font-size:0.7rem;color:#8b949e;margin-top:0.35rem">
-      Tripod: 3 legs · fast &nbsp;|&nbsp; Ripple: 2 legs · medium &nbsp;|&nbsp; Wave: 1 leg · stable
+      Tripod: 3 legs · fast &nbsp;|&nbsp; Ripple: 2 legs · medium &nbsp;|&nbsp; Wave: 1 leg · stable &nbsp;|&nbsp; Free: reactive
     </div>
   </div>
   <div>
@@ -795,7 +799,7 @@ HTML = r"""<!DOCTYPE html>
     <tr><td colspan="4" style="color:#58a6ff;padding-top:0.5rem;font-size:0.75rem">WALK MODE</td></tr>
     <tr><td>Left stick</td><td>Walk direction</td><td>Right stick X</td><td>Turn left / right</td></tr>
     <tr><td>LT / RT</td><td>Body height</td><td>LB / RB</td><td>Foot reach in / out</td></tr>
-    <tr><td>Back</td><td>Cycle gait (tripod→ripple→wave)</td><td></td><td></td></tr>
+    <tr><td>Back</td><td>Cycle gait (tripod→ripple→wave→free)</td><td></td><td></td></tr>
     <tr><td>D-pad ↑/↓</td><td>Speed ±0.5 cm/s</td><td>D-pad ←/→</td><td>Turn rate ±2 °/s</td></tr>
   </table>
 </div>
@@ -900,7 +904,7 @@ function selectGait(g) {
   if (wsOk) ws.send(JSON.stringify({ type: 'gait', gait: g }));
 }
 function setGait(g) {
-  ['tripod','ripple','wave'].forEach(name => {
+  ['tripod','ripple','wave','free'].forEach(name => {
     const el = document.getElementById('gait-' + name);
     if (el) el.className = 'gait-btn' + (name === g ? ' active' : '');
   });
