@@ -507,6 +507,22 @@ class FreeGait:
         self._body = replace(self._body, z=z)
 
     @property
+    def body_roll(self) -> float:
+        return self._body.roll
+
+    @body_roll.setter
+    def body_roll(self, roll: float) -> None:
+        self._body = replace(self._body, roll=roll)
+
+    @property
+    def body_pitch(self) -> float:
+        return self._body.pitch
+
+    @body_pitch.setter
+    def body_pitch(self, pitch: float) -> None:
+        self._body = replace(self._body, pitch=pitch)
+
+    @property
     def feet(self) -> FootMap:
         return dict(self._foot_world)
 

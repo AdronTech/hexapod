@@ -22,12 +22,20 @@ Controller mapping (Xbox / Steam Deck layout):
   LT / RT          — body down / up  (analog)
   LB / RB          — roll left / right  (digital)
 
-  Walk mode (tripod / ripple / wave / free gait):
+  Walk mode (tripod / ripple / wave gait):
   Left  stick X/Y  — walk direction (body-relative)
   Right stick X    — turn left / right
   LT / RT          — body height
   LB / RB          — foot reach in / out
-  Back             — cycle gait (tripod → ripple → wave → free)
+  Back             — cycle gait (tripod → ripple → wave)
+
+  Free mode (reactive stepping + full body pose):
+  Back (standing)  — enter free mode
+  Back (free)      — exit free mode
+  Left  stick X/Y  — walk direction (steps only when needed)
+  Right stick X/Y  — turn / pitch
+  LT / RT          — body height
+  LB / RB          — roll left / right  (reach via web UI)
 
   D-pad ↑/↓        — translate speed ±0.5 cm/s
   D-pad ←/→        — rotate speed ±2 °/s
@@ -50,7 +58,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from hexapod.body_ik import BodyPose, body_pose_ik, neutral_foot_body
 from hexapod.gait import FreeGait, RippleGait, TripodGait, WaveGait, _NEUTRAL_REACH
 
-GAITS = ["tripod", "ripple", "wave", "free"]
+GAITS = ["tripod", "ripple", "wave"]
 from hexapod.kinematics import COXA_LEN, FEMUR_LEN
 from hexapod.kinematics import IKError, angle_to_tick
 from hexapod.robot.config import Joint, Leg, servo_id
@@ -145,6 +153,7 @@ class SharedState:
         self._standing: bool   = False
         self._busy: bool       = False
         self._walk_mode: bool  = False
+        self._free_mode: bool  = False
         self._stored: bool     = False
         self._pose: dict       = {}
         self._message: str     = "Waiting for serial connection…"
@@ -191,11 +200,13 @@ class SharedState:
         pose: dict,
         message: str = "",
         walk_mode: bool = False,
+        free_mode: bool = False,
     ) -> None:
         with self._lock:
             self._standing  = standing
             self._busy      = busy
             self._walk_mode = walk_mode
+            self._free_mode = free_mode
             self._stored    = False   # any normal status update clears stored state
             self._pose      = dict(pose)
             self._message   = message
@@ -205,6 +216,7 @@ class SharedState:
             self._standing  = False
             self._busy      = False
             self._walk_mode = False
+            self._free_mode = False
             self._stored    = True
             self._pose      = {}
             self._message   = "Stored — press A to stand"
@@ -234,6 +246,7 @@ class SharedState:
                 "standing":  self._standing,
                 "busy":      self._busy,
                 "walk_mode": self._walk_mode,
+                "free_mode": self._free_mode,
                 "stored":    self._stored,
                 "pose":      dict(self._pose),
                 "message":   self._message,
@@ -280,6 +293,7 @@ class ControlThread(threading.Thread):
         gait   = None
         standing   = False
         walk_mode  = False
+        free_mode  = False
         prev_btns  = [0.0] * 17
         active_gait_type = "tripod"
 
@@ -308,7 +322,7 @@ class ControlThread(threading.Thread):
                 except Exception as e:
                     self._shared.set_status(False, False, {}, f"Store failed: {e}")
                 pose = None; feet = None; gait = None
-                standing = False; walk_mode = False
+                standing = False; walk_mode = False; free_mode = False
 
             if gp_on and not self._stop.is_set():
                 # Y button — storage mode (web UI path handled above)
@@ -320,7 +334,7 @@ class ControlThread(threading.Thread):
                     except Exception as e:
                         self._shared.set_status(False, False, {}, f"Store failed: {e}")
                     pose = None; feet = None; gait = None
-                    standing = False; walk_mode = False
+                    standing = False; walk_mode = False; free_mode = False
                     continue   # skip remaining button logic this tick
 
                 # D-pad: speed adjustment (always active, even while sitting)
@@ -350,31 +364,56 @@ class ControlThread(threading.Thread):
                     except Exception:
                         pass
                     pose = None; feet = None; gait = None
-                    standing = False; walk_mode = False
+                    standing = False; walk_mode = False; free_mode = False
                     self._shared.set_status(False, False, {}, "Sitting — press A to stand")
 
-                elif pressed[BTN_BACK] and standing and walk_mode:
-                    # Cycle gait type
-                    idx = GAITS.index(active_gait_type)
-                    active_gait_type = GAITS[(idx + 1) % len(GAITS)]
-                    self._shared.set_gait_type(active_gait_type)
-                    if gait is not None:
-                        gait = self._make_gait(active_gait_type, gait.body, gait.feet)
+                elif pressed[BTN_BACK] and standing:
+                    if walk_mode:
+                        # Cycle phase gait (tripod → ripple → wave)
+                        idx = GAITS.index(active_gait_type)
+                        active_gait_type = GAITS[(idx + 1) % len(GAITS)]
+                        self._shared.set_gait_type(active_gait_type)
+                        if gait is not None:
+                            snapped = {leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()}
+                            gait = self._make_gait(active_gait_type, gait.body, snapped)
+                    elif free_mode:
+                        # Exit free mode — snap feet to ground, return to pose mode
+                        if gait is not None:
+                            pose = replace(gait.body, roll=0.0, pitch=0.0)
+                            feet = {leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()}
+                            try:
+                                ticks = self._compute_ticks(pose, feet, limits)
+                                self._apply_ticks(bus, ticks)
+                            except (IKError, SoftLimitError):
+                                pass
+                        gait = None
+                        free_mode = False
+                        self._shared.set_status(True, False, self._pose_dict(pose))
+                    elif pose is not None and feet is not None:
+                        # Enter free mode from pose — snap feet to ground first
+                        snapped = {leg: (f[0], f[1], 0.0) for leg, f in feet.items()}
+                        gait = FreeGait(
+                            replace(pose, roll=0.0, pitch=0.0), snapped,
+                            neutral_reach=self._shared.get_reach(),
+                            step_threshold=FREE_STEP_THRESHOLD,
+                        )
+                        free_mode = True
+                        self._shared.set_status(
+                            True, False, self._pose_dict(gait.body), "Free", free_mode=True
+                        )
 
-                elif pressed[BTN_X] and standing and pose is not None and feet is not None:
+                elif pressed[BTN_X] and standing and not free_mode and pose is not None and feet is not None:
+                    # Toggle walk / pose mode (phase gaits only)
                     walk_mode = not walk_mode
                     if walk_mode:
                         active_gait_type = self._shared.get_gait_type()
-                        gait = self._make_gait(active_gait_type, pose, feet)
+                        snapped = {leg: (f[0], f[1], 0.0) for leg, f in feet.items()}
+                        gait = self._make_gait(active_gait_type, pose, snapped)
                     else:
-                        # Snap any airborne swing feet to ground before handing
-                        # back to pose mode — prevents floating-foot IK state.
+                        # Snap swing feet to ground when returning to pose mode
                         if gait is not None:
                             pose = gait.body
-                            feet = {
-                                leg: (f[0], f[1], 0.0)
-                                for leg, f in gait.feet.items()
-                            }
+                            feet = {leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()}
                             try:
                                 ticks = self._compute_ticks(pose, feet, limits)
                                 self._apply_ticks(bus, ticks)
@@ -383,9 +422,8 @@ class ControlThread(threading.Thread):
                         gait = None
 
                 elif pressed[BTN_START] and standing and feet is not None:
-                    # Reset to neutral pose; exits walk mode if active.
-                    walk_mode = False
-                    gait = None
+                    # Reset to neutral pose; exits walk / free mode
+                    walk_mode = False; free_mode = False; gait = None
                     neutral = BodyPose(z=STAND_HEIGHT)
                     neutral_feet = self._neutral_feet()
                     try:
@@ -397,31 +435,69 @@ class ControlThread(threading.Thread):
                     except (IKError, SoftLimitError):
                         pass
 
-                elif standing and walk_mode and gait is not None:
-                    # --- WALK MODE: gait engine drives body + feet ---
-                    desired_gait = self._shared.get_gait_type()
-                    if desired_gait != active_gait_type:
-                        active_gait_type = desired_gait
-                        gait = self._make_gait(active_gait_type, gait.body, gait.feet)
-
-                    yaw_rad  = math.radians(gait.body.yaw)
-                    body_vx  = -_dead(axes[AX_LSY]) * speed_cm   # forward
-                    body_vy  = -_dead(axes[AX_LSX]) * speed_cm   # left
-                    omega    = -_dead(axes[AX_RSX]) * speed_deg   # yaw rate
-
-                    # Rotate stick input from body frame to world frame
+                elif standing and free_mode and gait is not None:
+                    # --- FREE MODE: reactive stepping + full body pose control ---
+                    # Left stick: walk direction (triggers steps when feet drift)
+                    # Right stick X/Y: yaw / pitch  |  LT/RT: height  |  LB/RB: roll
+                    roll_rate = speed_deg / 2.0
+                    yaw_rad   = math.radians(gait.body.yaw)
+                    body_vx   = -_dead(axes[AX_LSY]) * speed_cm
+                    body_vy   = -_dead(axes[AX_LSX]) * speed_cm
+                    omega     = -_dead(axes[AX_RSX]) * speed_deg
                     vx = body_vx * math.cos(yaw_rad) - body_vy * math.sin(yaw_rad)
                     vy = body_vx * math.sin(yaw_rad) + body_vy * math.cos(yaw_rad)
 
-                    # LT / RT — body height
                     lt = _dead(buttons[BTN_LT])
                     rt = _dead(buttons[BTN_RT])
                     dz = (rt - lt) * speed_cm * DT
                     if abs(dz) > 1e-9:
                         gait.body_z = max(HEIGHT_MIN, min(HEIGHT_MAX, gait.body_z + dz))
 
-                    # LB / RB — foot reach (in / out); stance feet stay, swing
-                    #            feet naturally step to the new radius next cycle
+                    lb = 1.0 if buttons[BTN_LB] > 0.5 else 0.0
+                    rb = 1.0 if buttons[BTN_RB] > 0.5 else 0.0
+                    droll = (lb - rb) * roll_rate * DT
+                    if abs(droll) > 1e-9:
+                        gait.body_roll = max(-30.0, min(30.0, gait.body_roll + droll))
+
+                    dpitch = -_dead(axes[AX_RSY]) * speed_deg * DT
+                    if abs(dpitch) > 1e-9:
+                        gait.body_pitch = max(-30.0, min(30.0, gait.body_pitch + dpitch))
+
+                    gait.neutral_reach = self._shared.get_reach()
+
+                    new_pose, new_feet = gait.step(vx, vy, omega, DT)
+                    try:
+                        ticks = self._compute_ticks(new_pose, new_feet, limits)
+                        self._apply_ticks(bus, ticks)
+                        pose = new_pose
+                        feet = new_feet
+                    except (IKError, SoftLimitError):
+                        pass
+                    self._shared.set_status(
+                        True, False, self._pose_dict(pose), "Free", free_mode=True
+                    )
+
+                elif standing and walk_mode and gait is not None:
+                    # --- WALK MODE: phase gait (tripod / ripple / wave) ---
+                    desired_gait = self._shared.get_gait_type()
+                    if desired_gait != active_gait_type:
+                        active_gait_type = desired_gait
+                        snapped = {leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()}
+                        gait = self._make_gait(active_gait_type, gait.body, snapped)
+
+                    yaw_rad  = math.radians(gait.body.yaw)
+                    body_vx  = -_dead(axes[AX_LSY]) * speed_cm
+                    body_vy  = -_dead(axes[AX_LSX]) * speed_cm
+                    omega    = -_dead(axes[AX_RSX]) * speed_deg
+                    vx = body_vx * math.cos(yaw_rad) - body_vy * math.sin(yaw_rad)
+                    vy = body_vx * math.sin(yaw_rad) + body_vy * math.cos(yaw_rad)
+
+                    lt = _dead(buttons[BTN_LT])
+                    rt = _dead(buttons[BTN_RT])
+                    dz = (rt - lt) * speed_cm * DT
+                    if abs(dz) > 1e-9:
+                        gait.body_z = max(HEIGHT_MIN, min(HEIGHT_MAX, gait.body_z + dz))
+
                     lb = 1.0 if buttons[BTN_LB] > 0.5 else 0.0
                     rb = 1.0 if buttons[BTN_RB] > 0.5 else 0.0
                     if lb or rb:
@@ -441,7 +517,7 @@ class ControlThread(threading.Thread):
                         True, False, self._pose_dict(pose), "Walking", walk_mode=True
                     )
 
-                elif standing and not walk_mode and pose is not None and feet is not None:
+                elif standing and not walk_mode and not free_mode and pose is not None and feet is not None:
                     # --- POSE MODE: body sway, feet stay planted ---
                     roll_rate = speed_deg / 2.0
                     dx     = -_dead(axes[AX_LSY]) * speed_cm  * DT
@@ -485,8 +561,6 @@ class ControlThread(threading.Thread):
             return RippleGait(pose, feet, **kw)
         if gait_type == "wave":
             return WaveGait(pose, feet, **kw)
-        if gait_type == "free":
-            return FreeGait(pose, feet, **kw, step_threshold=FREE_STEP_THRESHOLD)
         return TripodGait(pose, feet, **kw)
 
     @staticmethod
@@ -768,10 +842,9 @@ HTML = r"""<!DOCTYPE html>
       <button class="gait-btn" id="gait-tripod" onclick="selectGait('tripod')">Tripod</button>
       <button class="gait-btn" id="gait-ripple" onclick="selectGait('ripple')">Ripple</button>
       <button class="gait-btn" id="gait-wave"   onclick="selectGait('wave')">Wave</button>
-      <button class="gait-btn" id="gait-free"   onclick="selectGait('free')">Free</button>
     </div>
     <div style="font-size:0.7rem;color:#8b949e;margin-top:0.35rem">
-      Tripod: 3 legs · fast &nbsp;|&nbsp; Ripple: 2 legs · medium &nbsp;|&nbsp; Wave: 1 leg · stable &nbsp;|&nbsp; Free: reactive
+      Tripod: 3 legs · fast &nbsp;|&nbsp; Ripple: 2 legs · medium &nbsp;|&nbsp; Wave: 1 leg · stable
     </div>
   </div>
   <div>
@@ -791,15 +864,20 @@ HTML = r"""<!DOCTYPE html>
   <h2>Controls</h2>
   <table class="controls">
     <tr><td>A</td><td>Stand</td><td>B</td><td>Sit</td></tr>
-    <tr><td>X</td><td>Toggle walk / pose mode</td><td>Y</td><td>Storage mode</td></tr>
+    <tr><td>X</td><td>Toggle walk / pose</td><td>Y</td><td>Storage mode</td></tr>
+    <tr><td>Back (standing)</td><td>Enter free mode</td><td>Back (free)</td><td>Exit free mode</td></tr>
     <tr><td>Start</td><td>Reset to neutral</td><td></td><td></td></tr>
     <tr><td colspan="4" style="color:#58a6ff;padding-top:0.5rem;font-size:0.75rem">POSE MODE</td></tr>
     <tr><td>Left stick</td><td>Translate body X/Y</td><td>Right stick</td><td>Yaw / Pitch</td></tr>
     <tr><td>LT / RT</td><td>Body down / up</td><td>LB / RB</td><td>Roll left / right</td></tr>
-    <tr><td colspan="4" style="color:#58a6ff;padding-top:0.5rem;font-size:0.75rem">WALK MODE</td></tr>
+    <tr><td colspan="4" style="color:#58a6ff;padding-top:0.5rem;font-size:0.75rem">WALK MODE (tripod / ripple / wave)</td></tr>
     <tr><td>Left stick</td><td>Walk direction</td><td>Right stick X</td><td>Turn left / right</td></tr>
     <tr><td>LT / RT</td><td>Body height</td><td>LB / RB</td><td>Foot reach in / out</td></tr>
-    <tr><td>Back</td><td>Cycle gait (tripod→ripple→wave→free)</td><td></td><td></td></tr>
+    <tr><td>Back</td><td>Cycle gait (tripod→ripple→wave)</td><td></td><td></td></tr>
+    <tr><td colspan="4" style="color:#58a6ff;padding-top:0.5rem;font-size:0.75rem">FREE MODE</td></tr>
+    <tr><td>Left stick</td><td>Walk direction (steps when needed)</td><td>Right stick X</td><td>Turn</td></tr>
+    <tr><td>Right stick Y</td><td>Pitch</td><td>LB / RB</td><td>Roll left / right</td></tr>
+    <tr><td>LT / RT</td><td>Body height</td><td></td><td>Reach via web UI</td></tr>
     <tr><td>D-pad ↑/↓</td><td>Speed ±0.5 cm/s</td><td>D-pad ←/→</td><td>Turn rate ±2 °/s</td></tr>
   </table>
 </div>
@@ -838,6 +916,7 @@ function sendCommand(cmd) {
 function updateStatus(d) {
   if (d.busy)               badge('b-robot', 'Busy…',    'warn');
   else if (d.stored)        badge('b-robot', 'Stored',   'warn');
+  else if (d.free_mode)     badge('b-robot', 'Free',     'ok');
   else if (d.walk_mode)     badge('b-robot', 'Walking',  'ok');
   else if (d.standing)      badge('b-robot', 'Standing', 'good');
   else                      badge('b-robot', 'Sitting',  'off');
@@ -904,7 +983,7 @@ function selectGait(g) {
   if (wsOk) ws.send(JSON.stringify({ type: 'gait', gait: g }));
 }
 function setGait(g) {
-  ['tripod','ripple','wave','free'].forEach(name => {
+  ['tripod','ripple','wave'].forEach(name => {
     const el = document.getElementById('gait-' + name);
     if (el) el.className = 'gait-btn' + (name === g ? ' active' : '');
   });
