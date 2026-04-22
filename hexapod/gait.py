@@ -48,6 +48,12 @@ _ADJACENT: dict[Leg, frozenset] = {
     for i, leg in enumerate(_LEG_RING)
 }
 
+# Diametrically opposite leg in the ring (best cross-side partner)
+_OPPOSITE: dict[Leg, Leg] = {
+    _LEG_RING[i]: _LEG_RING[(i + 3) % 6]
+    for i in range(6)
+}
+
 _NEUTRAL_REACH = COXA_LEN + FEMUR_LEN   # 17.4 cm from coxa pivot to neutral foot
 
 Foot3D = tuple[float, float, float]
@@ -563,15 +569,29 @@ class FreeGait:
         candidates.sort(reverse=True)
 
         swing_count = sum(1 for s in self._swinging.values() if s)
+        first_leg: Leg | None = None
         for _, leg in candidates:
-            if swing_count >= 2:
+            if swing_count >= 3:
                 break
             if any(self._swinging[adj] for adj in _ADJACENT[leg]):
                 continue
+            # When picking the second leg, prefer the opposite of the first to
+            # keep stepping symmetric across the left/right axis.
+            if first_leg is not None and leg != _OPPOSITE[first_leg]:
+                opp = _OPPOSITE[first_leg]
+                opp_err = self._foot_error(opp)
+                if (
+                    not self._swinging[opp]
+                    and opp_err > self.step_threshold
+                    and not any(self._swinging[adj] for adj in _ADJACENT[opp])
+                ):
+                    leg = opp
             self._swing_start[leg]  = self._foot_world[leg]
             self._swing_target[leg] = self._swing_target_for(leg, vx, vy, omega_deg)
             self._swing_t[leg]      = 0.0
             self._swinging[leg]     = True
+            if first_leg is None:
+                first_leg = leg
             swing_count += 1
 
         return self._body, dict(self._foot_world)

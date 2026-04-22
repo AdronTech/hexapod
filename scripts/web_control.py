@@ -97,7 +97,7 @@ SPEED_DEG_MIN, SPEED_DEG_MAX, SPEED_DEG_STEP = 2.0, 120.0, 2.0
 HEIGHT_MIN, HEIGHT_MAX = 8.0, 20.0   # cm
 REACH_MIN,  REACH_MAX  = 12.0, 26.0  # cm, range for neutral foot radius
 REACH_RATE_CMS         = 3.0         # cm/s change rate when LB/RB held in walk mode
-FREE_STEP_THRESHOLD    = 5.0         # cm from neutral before free-gait triggers a step
+FREE_STEP_THRESHOLD    = 8.0         # cm from neutral before free-gait triggers a step
 
 # Storage pose — fallback angles when soft_limits.json is not present
 STORAGE_FEMUR_DEG = 90.0    # raise femur this many degrees above horizontal
