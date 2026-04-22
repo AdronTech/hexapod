@@ -480,6 +480,7 @@ class ControlThread(threading.Thread):
                         feet = new_feet
                     except (IKError, SoftLimitError):
                         self._shared.bump_ik_errors()
+                        gait.body = pose
                     self._shared.set_status(
                         True, False, self._pose_dict(pose), "Free", free_mode=True
                     )
@@ -520,6 +521,7 @@ class ControlThread(threading.Thread):
                         feet = new_feet
                     except (IKError, SoftLimitError):
                         self._shared.bump_ik_errors()
+                        gait.body = pose
                     self._shared.set_status(
                         True, False, self._pose_dict(pose), "Walking", walk_mode=True
                     )

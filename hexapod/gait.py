@@ -131,6 +131,10 @@ class TripodGait:
     def body(self) -> BodyPose:
         return self._body
 
+    @body.setter
+    def body(self, b: BodyPose) -> None:
+        self._body = b
+
     @property
     def body_z(self) -> float:
         return self._body.z
@@ -303,6 +307,10 @@ class _PhasedGait:
     @property
     def body(self) -> BodyPose:
         return self._body
+
+    @body.setter
+    def body(self, b: BodyPose) -> None:
+        self._body = b
 
     @property
     def body_z(self) -> float:
@@ -507,6 +515,10 @@ class FreeGait:
     @property
     def body(self) -> BodyPose:
         return self._body
+
+    @body.setter
+    def body(self, b: BodyPose) -> None:
+        self._body = b
 
     @property
     def body_z(self) -> float:
