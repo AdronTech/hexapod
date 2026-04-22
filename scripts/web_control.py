@@ -161,6 +161,7 @@ class SharedState:
         self._pending_cmd: Optional[str] = None
         self._gait_type: str = "tripod"
         self._ik_errors: int = 0
+        self._last_ik_error: str = ""
 
     # --- input side ---
 
@@ -241,9 +242,11 @@ class SharedState:
         with self._lock:
             return self._gait_type
 
-    def bump_ik_errors(self) -> None:
+    def bump_ik_errors(self, msg: str = "") -> None:
         with self._lock:
             self._ik_errors += 1
+            if msg:
+                self._last_ik_error = msg
 
     def get_status(self) -> dict:
         with self._lock:
@@ -258,8 +261,9 @@ class SharedState:
                 "speed_cm":  self._speed_cm,
                 "speed_deg": self._speed_deg,
                 "reach":     self._reach,
-                "gait_type": self._gait_type,
-                "ik_errors": self._ik_errors,
+                "gait_type":      self._gait_type,
+                "ik_errors":      self._ik_errors,
+                "last_ik_error":  self._last_ik_error,
             }
 
 
@@ -478,9 +482,8 @@ class ControlThread(threading.Thread):
                         self._apply_ticks(bus, ticks)
                         pose = new_pose
                         feet = new_feet
-                    except (IKError, SoftLimitError):
-                        self._shared.bump_ik_errors()
-                        gait.body = pose
+                    except (IKError, SoftLimitError) as e:
+                        self._shared.bump_ik_errors(str(e))
                     self._shared.set_status(
                         True, False, self._pose_dict(pose), "Free", free_mode=True
                     )
@@ -519,8 +522,8 @@ class ControlThread(threading.Thread):
                         self._apply_ticks(bus, ticks)
                         pose = new_pose
                         feet = new_feet
-                    except (IKError, SoftLimitError):
-                        self._shared.bump_ik_errors()
+                    except (IKError, SoftLimitError) as e:
+                        self._shared.bump_ik_errors(str(e))
                         gait.body = pose
                     self._shared.set_status(
                         True, False, self._pose_dict(pose), "Walking", walk_mode=True
@@ -554,8 +557,8 @@ class ControlThread(threading.Thread):
                             ticks = self._compute_ticks(new_pose, feet, limits)
                             self._apply_ticks(bus, ticks)
                             pose = new_pose
-                        except (IKError, SoftLimitError):
-                            self._shared.bump_ik_errors()
+                        except (IKError, SoftLimitError) as e:
+                            self._shared.bump_ik_errors(str(e))
                     self._shared.set_status(True, False, self._pose_dict(pose))
 
             elapsed = time.monotonic() - t0
@@ -591,7 +594,10 @@ class ControlThread(threading.Thread):
         ticks: dict[Leg, dict[Joint, int]] = {}
         for leg, (tc, tf, tt) in angles.items():
             if limits:
-                limits.check(tc, tf, tt)
+                try:
+                    limits.check(tc, tf, tt)
+                except SoftLimitError as e:
+                    raise SoftLimitError(f"{leg.name}: {e}") from e
             ticks[leg] = {
                 Joint.COXA:  angle_to_tick("coxa",  tc),
                 Joint.FEMUR: angle_to_tick("femur", tf),
@@ -783,6 +789,7 @@ HTML = r"""<!DOCTYPE html>
 </div>
 
 <p class="message" id="msg"></p>
+<p class="message" id="msg-ik" style="font-size:0.75rem;color:#d29922;min-height:1em"></p>
 
 <div class="panel">
   <h2>Body Pose</h2>
@@ -953,6 +960,7 @@ function updateStatus(d) {
     const el = document.getElementById('b-ik');
     el.textContent = 'IK err: ' + d.ik_errors;
     el.className = 'badge ' + (d.ik_errors > 0 ? 'warn' : 'off');
+    document.getElementById('msg-ik').textContent = d.last_ik_error || '';
   }
 }
 

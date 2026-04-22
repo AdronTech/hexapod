@@ -16,7 +16,7 @@ Angles are in degrees throughout; positions in centimetres.
 import math
 from dataclasses import dataclass
 
-from hexapod.kinematics import leg_ik, COXA_LEN, FEMUR_LEN, TIBIA_LEN
+from hexapod.kinematics import leg_ik, IKError, COXA_LEN, FEMUR_LEN, TIBIA_LEN
 from hexapod.robot.config import Leg
 
 
@@ -145,7 +145,10 @@ def body_ik(
     result: dict[Leg, LegAngles] = {}
     for leg, foot_body in foot_positions.items():
         foot_leg = _body_to_leg(leg, foot_body)
-        result[leg] = leg_ik(*foot_leg)
+        try:
+            result[leg] = leg_ik(*foot_leg)
+        except IKError as e:
+            raise IKError(f"{leg.name}: {e}") from e
     return result
 
 
