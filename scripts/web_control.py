@@ -98,6 +98,8 @@ DPAD_DEG_RATE = 12.0  # °/s per second while D-pad held
 
 HEIGHT_MIN, HEIGHT_MAX = 8.0, 20.0   # cm
 REACH_MIN,  REACH_MAX  = 12.0, 26.0  # cm, range for neutral foot radius
+STEP_H_MIN, STEP_H_MAX = 1.0, 12.0   # cm, swing arc height
+STEP_T_MIN, STEP_T_MAX = 0.15, 1.0   # s,  per-leg swing duration
 REACH_RATE_CMS         = 3.0         # cm/s change rate when LB/RB held in walk mode
 FREE_STEP_THRESHOLD    = 3.0         # cm from neutral before free-gait triggers a step
 FREE_STEP_EMERGENCY    = 6.0         # cm — overrides adjacency constraint to prevent going out of reach
@@ -151,7 +153,9 @@ class SharedState:
         # Speeds — written by either side, clamped on write
         self._speed_cm:  float = DEFAULT_RATE_CM
         self._speed_deg: float = DEFAULT_RATE_DEG
-        self._reach:     float = _NEUTRAL_REACH
+        self._reach:      float = _NEUTRAL_REACH
+        self._step_height: float = 4.0
+        self._step_time:   float = 0.40
         # Written by control thread, read by WebSocket handler
         self._standing: bool   = False
         self._busy: bool       = False
@@ -195,6 +199,18 @@ class SharedState:
     def get_reach(self) -> float:
         with self._lock:
             return self._reach
+
+    def set_step_height(self, h: float) -> None:
+        with self._lock:
+            self._step_height = max(STEP_H_MIN, min(STEP_H_MAX, h))
+
+    def set_step_time(self, t: float) -> None:
+        with self._lock:
+            self._step_time = max(STEP_T_MIN, min(STEP_T_MAX, t))
+
+    def get_step_params(self) -> tuple[float, float]:
+        with self._lock:
+            return self._step_height, self._step_time
 
     # --- output side ---
 
@@ -265,6 +281,8 @@ class SharedState:
                 "speed_deg": self._speed_deg,
                 "reach":     self._reach,
                 "gait_type":      self._gait_type,
+                "step_height":    self._step_height,
+                "step_time":      self._step_time,
                 "ik_errors":      self._ik_errors,
                 "last_ik_error":  self._last_ik_error,
             }
@@ -314,6 +332,7 @@ class ControlThread(threading.Thread):
             t0 = time.monotonic()
             axes, buttons, gp_on = self._shared.get_gamepad()
             speed_cm, speed_deg  = self._shared.get_speeds()
+            step_height, step_time = self._shared.get_step_params()
 
             # Edge detection: pressed = low → high this tick
             n = max(len(buttons), 17)
@@ -388,7 +407,7 @@ class ControlThread(threading.Thread):
                         self._shared.set_gait_type(active_gait_type)
                         if gait is not None:
                             snapped = {leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()}
-                            gait = self._make_gait(active_gait_type, gait.body, snapped)
+                            gait = self._make_gait(active_gait_type, gait.body, snapped, step_height, step_time)
                     elif free_mode:
                         # Exit free mode — snap feet to ground, return to pose mode
                         if gait is not None:
@@ -408,6 +427,8 @@ class ControlThread(threading.Thread):
                         gait = FreeGait(
                             replace(pose, roll=0.0, pitch=0.0), snapped,
                             neutral_reach=self._shared.get_reach(),
+                            step_height=step_height,
+                            step_time=step_time,
                             step_threshold=FREE_STEP_THRESHOLD,
                             step_emergency_threshold=FREE_STEP_EMERGENCY,
                             step_reach_max=REACH_MAX,
@@ -424,7 +445,7 @@ class ControlThread(threading.Thread):
                     if walk_mode:
                         active_gait_type = self._shared.get_gait_type()
                         snapped = {leg: (f[0], f[1], 0.0) for leg, f in feet.items()}
-                        gait = self._make_gait(active_gait_type, pose, snapped)
+                        gait = self._make_gait(active_gait_type, pose, snapped, step_height, step_time)
                     else:
                         # Snap swing feet to ground when returning to pose mode
                         if gait is not None:
@@ -479,6 +500,8 @@ class ControlThread(threading.Thread):
                         gait.body_pitch = max(-30.0, min(30.0, gait.body_pitch + dpitch))
 
                     gait.neutral_reach = self._shared.get_reach()
+                    gait.step_height   = step_height
+                    gait.step_time     = step_time
 
                     new_pose, new_feet = gait.step(vx, vy, omega, DT)
                     try:
@@ -498,7 +521,7 @@ class ControlThread(threading.Thread):
                     if desired_gait != active_gait_type:
                         active_gait_type = desired_gait
                         snapped = {leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()}
-                        gait = self._make_gait(active_gait_type, gait.body, snapped)
+                        gait = self._make_gait(active_gait_type, gait.body, snapped, step_height, step_time)
 
                     yaw_rad  = math.radians(gait.body.yaw)
                     body_vx  = -_dead(axes[AX_LSY]) * speed_cm
@@ -519,6 +542,8 @@ class ControlThread(threading.Thread):
                         new_reach = self._shared.get_reach() + (rb - lb) * REACH_RATE_CMS * DT
                         self._shared.set_reach(new_reach)
                     gait.neutral_reach = self._shared.get_reach()
+                    gait.step_height   = step_height
+                    gait.step_time     = step_time
 
                     new_pose, new_feet = gait.step(vx, vy, omega, DT)
                     try:
@@ -573,8 +598,9 @@ class ControlThread(threading.Thread):
     # --- helpers ---
 
     @staticmethod
-    def _make_gait(gait_type: str, pose: BodyPose, feet: dict):
-        kw = dict(neutral_reach=_NEUTRAL_REACH)
+    def _make_gait(gait_type: str, pose: BodyPose, feet: dict,
+                   step_height: float = 4.0, step_time: float = 0.40):
+        kw = dict(neutral_reach=_NEUTRAL_REACH, step_height=step_height, step_time=step_time)
         if gait_type == "ripple":
             return RippleGait(pose, feet, **kw)
         if gait_type == "wave":
@@ -882,6 +908,26 @@ HTML = r"""<!DOCTYPE html>
     </div>
     <div class="speedbar-track" id="track-reach"><div class="speedbar-fill" id="bar-reach" style="width:39%"></div></div>
   </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.75rem">
+    <div>
+      <div style="font-size:0.75rem;color:#8b949e;margin-bottom:0.3rem">Step Height (cm)</div>
+      <div style="display:flex;align-items:center;gap:0.4rem">
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepH(-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
+        <span id="step-h-val" style="font-family:monospace;font-size:1.1rem;color:#79c0ff;min-width:3rem;text-align:center">4.0</span>
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepH(+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
+      </div>
+      <div class="speedbar-track" id="track-step-h"><div class="speedbar-fill" id="bar-step-h" style="width:27%"></div></div>
+    </div>
+    <div>
+      <div style="font-size:0.75rem;color:#8b949e;margin-bottom:0.3rem">Step Duration (s)</div>
+      <div style="display:flex;align-items:center;gap:0.4rem">
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepT(-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
+        <span id="step-t-val" style="font-family:monospace;font-size:1.1rem;color:#79c0ff;min-width:3rem;text-align:center">0.40</span>
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepT(+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
+      </div>
+      <div class="speedbar-track" id="track-step-t"><div class="speedbar-fill" id="bar-step-t" style="width:29%"></div></div>
+    </div>
+  </div>
 </div>
 
 <div class="panel">
@@ -925,13 +971,17 @@ function badge(id, text, cls) {
   el.className = 'badge ' + cls;
 }
 
-// Speed / reach state (kept locally to avoid needing a round-trip before the first +/− click)
+// Speed / reach / step state (kept locally to avoid needing a round-trip before the first +/− click)
 let localSpeedCm  = 15.0;
 let localSpeedDeg = 60.0;
 let localReach    = 17.4;
+let localStepH    = 4.0;
+let localStepT    = 0.40;
 const STEP_CM = 0.5, STEP_DEG = 2.0, STEP_REACH = 0.5;
 const MIN_CM = 0.5, MAX_CM = 30.0, MIN_DEG = 2.0, MAX_DEG = 120.0;
 const MIN_REACH = 12.0, MAX_REACH = 26.0;
+const STEP_H_STEP = 0.5, STEP_T_STEP = 0.05;
+const STEP_H_MIN = 1.0, STEP_H_MAX = 12.0, STEP_T_MIN = 0.15, STEP_T_MAX = 1.0;
 
 function sendCommand(cmd) {
   if (wsOk) ws.send(JSON.stringify({ type: 'command', cmd: cmd }));
@@ -959,7 +1009,9 @@ function updateStatus(d) {
   // Sync speed / reach / gait display from server
   if (d.speed_cm  !== undefined) { localSpeedCm  = d.speed_cm;  setSpeed('cm',  d.speed_cm);  }
   if (d.speed_deg !== undefined) { localSpeedDeg = d.speed_deg; setSpeed('deg', d.speed_deg); }
-  if (d.reach     !== undefined) { localReach    = d.reach;     setReach(d.reach); }
+  if (d.reach       !== undefined) { localReach = d.reach;         setReach(d.reach); }
+  if (d.step_height !== undefined) { localStepH = d.step_height;   setStepH(d.step_height); }
+  if (d.step_time   !== undefined) { localStepT = d.step_time;     setStepT(d.step_time); }
   if (d.gait_type !== undefined && d.gait_type !== localGait) { localGait = d.gait_type; setGait(d.gait_type); }
   if (d.ik_errors !== undefined) {
     const el = document.getElementById('b-ik');
@@ -1004,6 +1056,27 @@ function adjustReach(dir) {
   localReach = Math.max(MIN_REACH, Math.min(MAX_REACH, +(localReach + dir * STEP_REACH).toFixed(1)));
   setReach(localReach);
   if (wsOk) ws.send(JSON.stringify({ type: 'reach', reach: localReach }));
+}
+
+function setStepH(val) {
+  setText('step-h-val', val.toFixed(1));
+  document.getElementById('bar-step-h').style.width =
+    ((val - STEP_H_MIN) / (STEP_H_MAX - STEP_H_MIN) * 100).toFixed(1) + '%';
+}
+function setStepT(val) {
+  setText('step-t-val', val.toFixed(2));
+  document.getElementById('bar-step-t').style.width =
+    ((val - STEP_T_MIN) / (STEP_T_MAX - STEP_T_MIN) * 100).toFixed(1) + '%';
+}
+function adjustStepH(dir) {
+  localStepH = Math.max(STEP_H_MIN, Math.min(STEP_H_MAX, +(localStepH + dir * STEP_H_STEP).toFixed(1)));
+  setStepH(localStepH);
+  if (wsOk) ws.send(JSON.stringify({ type: 'step_height', value: localStepH }));
+}
+function adjustStepT(dir) {
+  localStepT = Math.max(STEP_T_MIN, Math.min(STEP_T_MAX, +(localStepT + dir * STEP_T_STEP).toFixed(2)));
+  setStepT(localStepT);
+  if (wsOk) ws.send(JSON.stringify({ type: 'step_time', value: localStepT }));
 }
 
 // Long-press auto-repeat for +/− buttons
@@ -1129,7 +1202,9 @@ function _sendSpeeds() {
 }
 _makeDraggable('track-cm',    MIN_CM,    MAX_CM,    v => { localSpeedCm  = v; setSpeed('cm',  v); _sendSpeeds(); });
 _makeDraggable('track-deg',   MIN_DEG,   MAX_DEG,   v => { localSpeedDeg = v; setSpeed('deg', v); _sendSpeeds(); });
-_makeDraggable('track-reach', MIN_REACH, MAX_REACH, v => { localReach    = v; setReach(v);        if (wsOk) ws.send(JSON.stringify({type:'reach', reach: v})); });
+_makeDraggable('track-reach',  MIN_REACH,  MAX_REACH,  v => { localReach = v; setReach(v);   if (wsOk) ws.send(JSON.stringify({type:'reach',       reach: v})); });
+_makeDraggable('track-step-h', STEP_H_MIN, STEP_H_MAX, v => { localStepH = v; setStepH(v);  if (wsOk) ws.send(JSON.stringify({type:'step_height', value: v})); });
+_makeDraggable('track-step-t', STEP_T_MIN, STEP_T_MAX, v => { localStepT = v; setStepT(v);  if (wsOk) ws.send(JSON.stringify({type:'step_time',   value: v})); });
 requestAnimationFrame(loop);
 </script>
 </body>
@@ -1180,6 +1255,10 @@ def build_app(shared: SharedState) -> FastAPI:
                         shared.set_reach(data.get("reach", _NEUTRAL_REACH))
                     elif data.get("type") == "gait":
                         shared.set_gait_type(data.get("gait", "tripod"))
+                    elif data.get("type") == "step_height":
+                        shared.set_step_height(data.get("value", 4.0))
+                    elif data.get("type") == "step_time":
+                        shared.set_step_time(data.get("value", 0.40))
                     elif data.get("type") == "command":
                         shared.request_command(data.get("cmd", ""))
                     else:

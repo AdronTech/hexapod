@@ -292,6 +292,7 @@ class _PhasedGait:
     ) -> None:
         self._cycle_time   = cycle_time
         self._swing_frac   = swing_fraction
+        self._step_time    = cycle_time * swing_fraction
         self.step_height   = step_height
         self.neutral_reach = neutral_reach
         self._offsets      = phase_offsets
@@ -319,6 +320,15 @@ class _PhasedGait:
     @body_z.setter
     def body_z(self, z: float) -> None:
         self._body = replace(self._body, z=z)
+
+    @property
+    def step_time(self) -> float:
+        return self._step_time
+
+    @step_time.setter
+    def step_time(self, t: float) -> None:
+        self._step_time  = t
+        self._cycle_time = t / self._swing_frac
 
     @property
     def feet(self) -> FootMap:
