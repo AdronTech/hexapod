@@ -93,6 +93,8 @@ DEFAULT_RATE_DEG = 60.0   # deg/s max rotation / pitch speed
 
 SPEED_CM_MIN,  SPEED_CM_MAX,  SPEED_CM_STEP  = 0.5, 30.0, 0.5
 SPEED_DEG_MIN, SPEED_DEG_MAX, SPEED_DEG_STEP = 2.0, 120.0, 2.0
+DPAD_CM_RATE  = 3.0   # cm/s per second while D-pad held
+DPAD_DEG_RATE = 12.0  # °/s per second while D-pad held
 
 HEIGHT_MIN, HEIGHT_MAX = 8.0, 20.0   # cm
 REACH_MIN,  REACH_MAX  = 12.0, 26.0  # cm, range for neutral foot radius
@@ -348,15 +350,15 @@ class ControlThread(threading.Thread):
                     standing = False; walk_mode = False; free_mode = False
                     continue   # skip remaining button logic this tick
 
-                # D-pad: speed adjustment (always active, even while sitting)
-                if pressed[BTN_DUP]:
-                    self._shared.set_speeds(speed_cm + SPEED_CM_STEP, speed_deg)
-                elif pressed[BTN_DDOWN]:
-                    self._shared.set_speeds(speed_cm - SPEED_CM_STEP, speed_deg)
-                if pressed[BTN_DRIGHT]:
-                    self._shared.set_speeds(speed_cm, speed_deg + SPEED_DEG_STEP)
-                elif pressed[BTN_DLEFT]:
-                    self._shared.set_speeds(speed_cm, speed_deg - SPEED_DEG_STEP)
+                # D-pad: speed adjustment (continuous while held)
+                if buttons[BTN_DUP] > 0.5:
+                    self._shared.set_speeds(speed_cm + DPAD_CM_RATE * DT, speed_deg)
+                elif buttons[BTN_DDOWN] > 0.5:
+                    self._shared.set_speeds(speed_cm - DPAD_CM_RATE * DT, speed_deg)
+                if buttons[BTN_DRIGHT] > 0.5:
+                    self._shared.set_speeds(speed_cm, speed_deg + DPAD_DEG_RATE * DT)
+                elif buttons[BTN_DLEFT] > 0.5:
+                    self._shared.set_speeds(speed_cm, speed_deg - DPAD_DEG_RATE * DT)
 
                 if pressed[BTN_A] and not standing:
                     self._shared.set_status(False, True, {}, "Standing up…")
@@ -760,11 +762,12 @@ HTML = r"""<!DOCTYPE html>
   .spdbtn:active { background: #1f6feb; }
 
   .speedbar-track {
-    height: 6px; background: #21262d; border-radius: 3px;
+    height: 12px; background: #21262d; border-radius: 6px;
     margin-top: 0.4rem; overflow: hidden;
+    cursor: pointer; touch-action: none;
   }
   .speedbar-fill {
-    height: 100%; border-radius: 3px;
+    height: 100%; border-radius: 6px;
     background: linear-gradient(90deg, #1f6feb 0%, #58a6ff 100%);
     transition: width 0.15s ease;
   }
@@ -835,20 +838,20 @@ HTML = r"""<!DOCTYPE html>
     <div>
       <div style="font-size:0.75rem;color:#8b949e;margin-bottom:0.3rem">Translate (cm/s) &nbsp;<span style="color:#8b949e;font-size:0.7rem">D-pad ↑↓</span></div>
       <div style="display:flex;align-items:center;gap:0.4rem">
-        <button class="spdbtn" onclick="adjustSpeed('cm',-1)">−</button>
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('cm',-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
         <span id="spd-cm" style="font-family:monospace;font-size:1.1rem;color:#79c0ff;min-width:3rem;text-align:center">15.0</span>
-        <button class="spdbtn" onclick="adjustSpeed('cm',+1)">+</button>
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('cm',+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
       </div>
-      <div class="speedbar-track"><div class="speedbar-fill" id="bar-cm" style="width:100%"></div></div>
+      <div class="speedbar-track" id="track-cm"><div class="speedbar-fill" id="bar-cm" style="width:100%"></div></div>
     </div>
     <div>
       <div style="font-size:0.75rem;color:#8b949e;margin-bottom:0.3rem">Rotate (°/s) &nbsp;<span style="color:#8b949e;font-size:0.7rem">D-pad ←→</span></div>
       <div style="display:flex;align-items:center;gap:0.4rem">
-        <button class="spdbtn" onclick="adjustSpeed('deg',-1)">−</button>
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('deg',-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
         <span id="spd-deg" style="font-family:monospace;font-size:1.1rem;color:#79c0ff;min-width:3rem;text-align:center">60.0</span>
-        <button class="spdbtn" onclick="adjustSpeed('deg',+1)">+</button>
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('deg',+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
       </div>
-      <div class="speedbar-track"><div class="speedbar-fill" id="bar-deg" style="width:100%"></div></div>
+      <div class="speedbar-track" id="track-deg"><div class="speedbar-fill" id="bar-deg" style="width:100%"></div></div>
     </div>
   </div>
 </div>
@@ -873,11 +876,11 @@ HTML = r"""<!DOCTYPE html>
       Foot Reach (cm) &nbsp;<span style="color:#8b949e;font-size:0.7rem">Walk: LB/RB</span>
     </div>
     <div style="display:flex;align-items:center;gap:0.4rem">
-      <button class="spdbtn" onclick="adjustReach(-1)">−</button>
+      <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustReach(-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
       <span id="reach-val" style="font-family:monospace;font-size:1.1rem;color:#79c0ff;min-width:3rem;text-align:center">17.4</span>
-      <button class="spdbtn" onclick="adjustReach(+1)">+</button>
+      <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustReach(+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
     </div>
-    <div class="speedbar-track"><div class="speedbar-fill" id="bar-reach" style="width:39%"></div></div>
+    <div class="speedbar-track" id="track-reach"><div class="speedbar-fill" id="bar-reach" style="width:39%"></div></div>
   </div>
 </div>
 
@@ -1003,6 +1006,35 @@ function adjustReach(dir) {
   if (wsOk) ws.send(JSON.stringify({ type: 'reach', reach: localReach }));
 }
 
+// Long-press auto-repeat for +/− buttons
+let _pressTimer = null, _pressInterval = null;
+function _pressStart(fn) {
+  fn();
+  _pressTimer = setTimeout(() => { _pressInterval = setInterval(fn, 80); }, 450);
+}
+function _pressStop() {
+  clearTimeout(_pressTimer); clearInterval(_pressInterval);
+  _pressTimer = _pressInterval = null;
+}
+
+// Draggable slider tracks
+function _makeDraggable(trackId, min, max, setter) {
+  const track = document.getElementById(trackId);
+  if (!track) return;
+  let active = false;
+  function fromPointer(e) {
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    setter(+(min + ratio * (max - min)).toFixed(1));
+  }
+  track.addEventListener('pointerdown', e => {
+    e.preventDefault(); active = true; track.setPointerCapture(e.pointerId); fromPointer(e);
+  });
+  track.addEventListener('pointermove', e => { if (active) fromPointer(e); });
+  track.addEventListener('pointerup',     () => { active = false; });
+  track.addEventListener('pointercancel', () => { active = false; });
+}
+
 let localGait = 'tripod';
 function selectGait(g) {
   localGait = g;
@@ -1092,6 +1124,12 @@ function loop() {
 
 connect();
 setGait('tripod');
+function _sendSpeeds() {
+  if (wsOk) ws.send(JSON.stringify({type:'speed', speed_cm: localSpeedCm, speed_deg: localSpeedDeg}));
+}
+_makeDraggable('track-cm',    MIN_CM,    MAX_CM,    v => { localSpeedCm  = v; setSpeed('cm',  v); _sendSpeeds(); });
+_makeDraggable('track-deg',   MIN_DEG,   MAX_DEG,   v => { localSpeedDeg = v; setSpeed('deg', v); _sendSpeeds(); });
+_makeDraggable('track-reach', MIN_REACH, MAX_REACH, v => { localReach    = v; setReach(v);        if (wsOk) ws.send(JSON.stringify({type:'reach', reach: v})); });
 requestAnimationFrame(loop);
 </script>
 </body>
