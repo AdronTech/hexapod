@@ -97,7 +97,7 @@ SPEED_DEG_MIN, SPEED_DEG_MAX, SPEED_DEG_STEP = 2.0, 120.0, 2.0
 HEIGHT_MIN, HEIGHT_MAX = 8.0, 20.0   # cm
 REACH_MIN,  REACH_MAX  = 12.0, 26.0  # cm, range for neutral foot radius
 REACH_RATE_CMS         = 3.0         # cm/s change rate when LB/RB held in walk mode
-FREE_STEP_THRESHOLD    = 8.0         # cm from neutral before free-gait triggers a step
+FREE_STEP_THRESHOLD    = 5.0         # cm from neutral before free-gait triggers a step
 
 # Storage pose — fallback angles when soft_limits.json is not present
 STORAGE_FEMUR_DEG = 90.0    # raise femur this many degrees above horizontal
@@ -160,6 +160,7 @@ class SharedState:
         # Pending command from the web UI (one-shot; cleared after reading)
         self._pending_cmd: Optional[str] = None
         self._gait_type: str = "tripod"
+        self._ik_errors: int = 0
 
     # --- input side ---
 
@@ -240,6 +241,10 @@ class SharedState:
         with self._lock:
             return self._gait_type
 
+    def bump_ik_errors(self) -> None:
+        with self._lock:
+            self._ik_errors += 1
+
     def get_status(self) -> dict:
         with self._lock:
             return {
@@ -254,6 +259,7 @@ class SharedState:
                 "speed_deg": self._speed_deg,
                 "reach":     self._reach,
                 "gait_type": self._gait_type,
+                "ik_errors": self._ik_errors,
             }
 
 
@@ -396,6 +402,8 @@ class ControlThread(threading.Thread):
                             replace(pose, roll=0.0, pitch=0.0), snapped,
                             neutral_reach=self._shared.get_reach(),
                             step_threshold=FREE_STEP_THRESHOLD,
+                            step_reach_max=REACH_MAX,
+                            step_reach_min=REACH_MIN,
                         )
                         free_mode = True
                         self._shared.set_status(
@@ -471,7 +479,7 @@ class ControlThread(threading.Thread):
                         pose = new_pose
                         feet = new_feet
                     except (IKError, SoftLimitError):
-                        pass
+                        self._shared.bump_ik_errors()
                     self._shared.set_status(
                         True, False, self._pose_dict(pose), "Free", free_mode=True
                     )
@@ -511,7 +519,7 @@ class ControlThread(threading.Thread):
                         pose = new_pose
                         feet = new_feet
                     except (IKError, SoftLimitError):
-                        pass
+                        self._shared.bump_ik_errors()
                     self._shared.set_status(
                         True, False, self._pose_dict(pose), "Walking", walk_mode=True
                     )
@@ -545,7 +553,7 @@ class ControlThread(threading.Thread):
                             self._apply_ticks(bus, ticks)
                             pose = new_pose
                         except (IKError, SoftLimitError):
-                            pass
+                            self._shared.bump_ik_errors()
                     self._shared.set_status(True, False, self._pose_dict(pose))
 
             elapsed = time.monotonic() - t0
@@ -768,6 +776,7 @@ HTML = r"""<!DOCTYPE html>
   <span class="badge off" id="b-ws">WS: …</span>
   <span class="badge off" id="b-gp">Controller: none</span>
   <span class="badge off" id="b-robot">Sitting</span>
+  <span class="badge off" id="b-ik">IK err: 0</span>
   <button class="badge warn" id="btn-store" onclick="sendCommand('store')" style="cursor:pointer;border:none">&#9660; Store</button>
 </div>
 
@@ -938,6 +947,11 @@ function updateStatus(d) {
   if (d.speed_deg !== undefined) { localSpeedDeg = d.speed_deg; setSpeed('deg', d.speed_deg); }
   if (d.reach     !== undefined) { localReach    = d.reach;     setReach(d.reach); }
   if (d.gait_type !== undefined && d.gait_type !== localGait) { localGait = d.gait_type; setGait(d.gait_type); }
+  if (d.ik_errors !== undefined) {
+    const el = document.getElementById('b-ik');
+    el.textContent = 'IK err: ' + d.ik_errors;
+    el.className = 'badge ' + (d.ik_errors > 0 ? 'warn' : 'off');
+  }
 }
 
 function setText(id, v) { document.getElementById(id).textContent = v; }

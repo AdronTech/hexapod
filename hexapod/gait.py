@@ -486,11 +486,15 @@ class FreeGait:
         step_height: float = 4.0,
         neutral_reach: float = _NEUTRAL_REACH,
         step_threshold: float = 5.0,
+        step_reach_max: float = COXA_LEN + FEMUR_LEN + 8.0,
+        step_reach_min: float = COXA_LEN + 2.0,
     ) -> None:
-        self.step_time      = step_time
-        self.step_height    = step_height
-        self.neutral_reach  = neutral_reach
-        self.step_threshold = step_threshold
+        self.step_time        = step_time
+        self.step_height      = step_height
+        self.neutral_reach    = neutral_reach
+        self.step_threshold   = step_threshold
+        self._step_reach_max  = step_reach_max
+        self._step_reach_min  = step_reach_min
 
         self._body       = initial_pose
         self._foot_world = dict(initial_feet)
@@ -622,7 +626,24 @@ class FreeGait:
         half_t     = self.step_time * 0.5
         half_omega = math.radians(omega_deg * half_t)
         rx, ry     = _rotate2d(nx, ny, self._body.x, self._body.y, half_omega)
-        return (rx + vx * half_t, ry + vy * half_t, nz)
+        tx, ty = rx + vx * half_t, ry + vy * half_t
+
+        # Clamp to reachable radius from the coxa pivot
+        cx, cy, _ = corner_pos(leg)
+        wa = math.radians(self._body.yaw) + math.atan2(cy, cx)
+        cr = math.hypot(cx, cy)
+        pivot_x = self._body.x + cr * math.cos(wa)
+        pivot_y = self._body.y + cr * math.sin(wa)
+        dx, dy = tx - pivot_x, ty - pivot_y
+        dist = math.hypot(dx, dy)
+        if dist > 1e-9:
+            if dist > self._step_reach_max:
+                s = self._step_reach_max / dist
+                tx, ty = pivot_x + dx * s, pivot_y + dy * s
+            elif dist < self._step_reach_min:
+                s = self._step_reach_min / dist
+                tx, ty = pivot_x + dx * s, pivot_y + dy * s
+        return (tx, ty, nz)
 
     def _swing_arc(self, p0: Foot3D, p3: Foot3D, t: float) -> Foot3D:
         h  = self.step_height * (4.0 / 3.0)
