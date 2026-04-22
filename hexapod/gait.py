@@ -496,13 +496,15 @@ class FreeGait:
         step_threshold: float = 5.0,
         step_reach_max: float = COXA_LEN + FEMUR_LEN + 8.0,
         step_reach_min: float = COXA_LEN + 2.0,
+        step_emergency_threshold: float = 6.0,
     ) -> None:
-        self.step_time        = step_time
-        self.step_height      = step_height
-        self.neutral_reach    = neutral_reach
-        self.step_threshold   = step_threshold
-        self._step_reach_max  = step_reach_max
-        self._step_reach_min  = step_reach_min
+        self.step_time                = step_time
+        self.step_height              = step_height
+        self.neutral_reach            = neutral_reach
+        self.step_threshold           = step_threshold
+        self.step_emergency_threshold = step_emergency_threshold
+        self._step_reach_max          = step_reach_max
+        self._step_reach_min          = step_reach_min
 
         self._body       = initial_pose
         self._foot_world = dict(initial_feet)
@@ -586,10 +588,11 @@ class FreeGait:
 
         swing_count = sum(1 for s in self._swinging.values() if s)
         first_leg: Leg | None = None
-        for _, leg in candidates:
+        for err, leg in candidates:
             if swing_count >= 3:
                 break
-            if any(self._swinging[adj] for adj in _ADJACENT[leg]):
+            emergency = err > self.step_emergency_threshold
+            if not emergency and any(self._swinging[adj] for adj in _ADJACENT[leg]):
                 continue
             # When picking the second leg, prefer the opposite of the first to
             # keep stepping symmetric across the left/right axis.

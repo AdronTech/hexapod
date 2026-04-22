@@ -97,7 +97,8 @@ SPEED_DEG_MIN, SPEED_DEG_MAX, SPEED_DEG_STEP = 2.0, 120.0, 2.0
 HEIGHT_MIN, HEIGHT_MAX = 8.0, 20.0   # cm
 REACH_MIN,  REACH_MAX  = 12.0, 26.0  # cm, range for neutral foot radius
 REACH_RATE_CMS         = 3.0         # cm/s change rate when LB/RB held in walk mode
-FREE_STEP_THRESHOLD    = 5.0         # cm from neutral before free-gait triggers a step
+FREE_STEP_THRESHOLD    = 3.0         # cm from neutral before free-gait triggers a step
+FREE_STEP_EMERGENCY    = 6.0         # cm — overrides adjacency constraint to prevent going out of reach
 
 # Storage pose — fallback angles when soft_limits.json is not present
 STORAGE_FEMUR_DEG = 90.0    # raise femur this many degrees above horizontal
@@ -406,6 +407,7 @@ class ControlThread(threading.Thread):
                             replace(pose, roll=0.0, pitch=0.0), snapped,
                             neutral_reach=self._shared.get_reach(),
                             step_threshold=FREE_STEP_THRESHOLD,
+                            step_emergency_threshold=FREE_STEP_EMERGENCY,
                             step_reach_max=REACH_MAX,
                             step_reach_min=REACH_MIN,
                         )
