@@ -79,6 +79,8 @@ DEFAULT_SERIAL_PORT = "/dev/ttyACM0"
 DEFAULT_HTTP_HOST = "0.0.0.0"
 DEFAULT_HTTP_PORT = 8080
 
+CONFIG_PATH = Path(__file__).parent / "hexapod_config.json"
+
 STAND_HEIGHT = 15.0   # cm
 STAND_SPEED  = 300    # ticks/s for stand/sit motion
 
@@ -103,6 +105,39 @@ STEP_T_MIN, STEP_T_MAX = 0.15, 1.0   # s,  per-leg swing duration
 REACH_RATE_CMS         = 3.0         # cm/s change rate when LB/RB held in walk mode
 FREE_STEP_THRESHOLD    = 3.0         # cm from neutral before free-gait triggers a step
 FREE_STEP_EMERGENCY    = 6.0         # cm — overrides adjacency constraint to prevent going out of reach
+STEP_THRESHOLD_MIN, STEP_THRESHOLD_MAX = 0.5, 8.0
+
+DEFAULT_CONFIG: dict = {
+    "speed_cm":       DEFAULT_RATE_CM,
+    "speed_deg":      DEFAULT_RATE_DEG,
+    "reach":          _NEUTRAL_REACH,
+    "step_height":    4.0,
+    "step_time":      0.40,
+    "gait_type":      "tripod",
+    "step_threshold": FREE_STEP_THRESHOLD,
+}
+
+
+def load_config() -> dict:
+    try:
+        return {**DEFAULT_CONFIG, **json.loads(CONFIG_PATH.read_text())}
+    except Exception:
+        return dict(DEFAULT_CONFIG)
+
+
+def save_config(shared: "SharedState") -> None:
+    status = shared.get_status()
+    cfg = {k: status[k] for k in DEFAULT_CONFIG}
+    CONFIG_PATH.write_text(json.dumps(cfg, indent=2))
+
+
+def apply_config(cfg: dict, shared: "SharedState") -> None:
+    shared.set_speeds(cfg.get("speed_cm", DEFAULT_RATE_CM), cfg.get("speed_deg", DEFAULT_RATE_DEG))
+    shared.set_reach(cfg.get("reach", _NEUTRAL_REACH))
+    shared.set_step_height(cfg.get("step_height", 4.0))
+    shared.set_step_time(cfg.get("step_time", 0.40))
+    shared.set_gait_type(cfg.get("gait_type", "tripod"))
+    shared.set_step_threshold(cfg.get("step_threshold", FREE_STEP_THRESHOLD))
 
 # Storage pose — fallback angles when soft_limits.json is not present
 STORAGE_FEMUR_DEG = 90.0    # raise femur this many degrees above horizontal
@@ -153,9 +188,10 @@ class SharedState:
         # Speeds — written by either side, clamped on write
         self._speed_cm:  float = DEFAULT_RATE_CM
         self._speed_deg: float = DEFAULT_RATE_DEG
-        self._reach:      float = _NEUTRAL_REACH
-        self._step_height: float = 4.0
-        self._step_time:   float = 0.40
+        self._reach:        float = _NEUTRAL_REACH
+        self._step_height:  float = 4.0
+        self._step_time:    float = 0.40
+        self._step_threshold: float = FREE_STEP_THRESHOLD
         # Written by control thread, read by WebSocket handler
         self._standing: bool   = False
         self._busy: bool       = False
@@ -208,9 +244,13 @@ class SharedState:
         with self._lock:
             self._step_time = max(STEP_T_MIN, min(STEP_T_MAX, t))
 
-    def get_step_params(self) -> tuple[float, float]:
+    def set_step_threshold(self, t: float) -> None:
         with self._lock:
-            return self._step_height, self._step_time
+            self._step_threshold = max(STEP_THRESHOLD_MIN, min(STEP_THRESHOLD_MAX, t))
+
+    def get_step_params(self) -> tuple[float, float, float]:
+        with self._lock:
+            return self._step_height, self._step_time, self._step_threshold
 
     # --- output side ---
 
@@ -283,6 +323,7 @@ class SharedState:
                 "gait_type":      self._gait_type,
                 "step_height":    self._step_height,
                 "step_time":      self._step_time,
+                "step_threshold": self._step_threshold,
                 "ik_errors":      self._ik_errors,
                 "last_ik_error":  self._last_ik_error,
             }
@@ -332,7 +373,7 @@ class ControlThread(threading.Thread):
             t0 = time.monotonic()
             axes, buttons, gp_on = self._shared.get_gamepad()
             speed_cm, speed_deg  = self._shared.get_speeds()
-            step_height, step_time = self._shared.get_step_params()
+            step_height, step_time, step_threshold = self._shared.get_step_params()
 
             # Edge detection: pressed = low → high this tick
             n = max(len(buttons), 17)
@@ -429,7 +470,7 @@ class ControlThread(threading.Thread):
                             neutral_reach=self._shared.get_reach(),
                             step_height=step_height,
                             step_time=step_time,
-                            step_threshold=FREE_STEP_THRESHOLD,
+                            step_threshold=step_threshold,
                             step_emergency_threshold=FREE_STEP_EMERGENCY,
                             step_reach_max=REACH_MAX,
                             step_reach_min=REACH_MIN,
@@ -499,9 +540,10 @@ class ControlThread(threading.Thread):
                     if abs(dpitch) > 1e-9:
                         gait.body_pitch = max(-30.0, min(30.0, gait.body_pitch + dpitch))
 
-                    gait.neutral_reach = self._shared.get_reach()
-                    gait.step_height   = step_height
-                    gait.step_time     = step_time
+                    gait.neutral_reach  = self._shared.get_reach()
+                    gait.step_height    = step_height
+                    gait.step_time      = step_time
+                    gait.step_threshold = step_threshold
 
                     new_pose, new_feet = gait.step(vx, vy, omega, DT)
                     try:
@@ -727,21 +769,21 @@ HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hexapod</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: #0d1117; color: #c9d1d9;
     font-family: 'Segoe UI', system-ui, sans-serif;
-    padding: 1rem; font-size: 15px;
+    font-size: 14px; padding: 0.4rem;
+    height: 100vh; display: flex; flex-direction: column; gap: 0.25rem;
+    overflow: hidden;
   }
-  h1 { color: #58a6ff; margin-bottom: 0.75rem; font-size: 1.4rem; letter-spacing: 0.05em; }
-  h2 { color: #8b949e; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem; }
+  h2 { color: #8b949e; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.3rem; }
 
-  .row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
   .badge {
-    padding: 0.25rem 0.7rem; border-radius: 99px; font-size: 0.8rem; font-weight: 600;
+    padding: 0.2rem 0.55rem; border-radius: 99px; font-size: 0.74rem; font-weight: 600;
     transition: background 0.2s, color 0.2s;
   }
   .off  { background: #21262d; color: #8b949e; }
@@ -750,272 +792,319 @@ HTML = r"""<!DOCTYPE html>
   .good { background: #1a7f3733; color: #3fb950; border: 1px solid #238636; }
 
   .panel {
-    background: #161b22; border: 1px solid #21262d; border-radius: 8px;
-    padding: 0.75rem 1rem; margin-bottom: 0.75rem;
+    background: #161b22; border: 1px solid #21262d; border-radius: 6px;
+    padding: 0.45rem 0.65rem;
   }
 
+  /* Header */
+  #hdr { flex: 0 0 auto; }
+  #hdr-top { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem; }
+  #hdr-top h1 { color: #58a6ff; font-size: 1.05rem; letter-spacing: 0.04em; margin-right: 0.15rem; }
+  #msg-area { font-size: 0.76rem; color: #d29922; min-height: 1em; margin-top: 0.1rem; }
+
+  /* 2-column main layout */
+  #main {
+    flex: 1 1 0; display: grid;
+    grid-template-columns: 1fr 1.45fr;
+    gap: 0.35rem; min-height: 0;
+  }
+  #col-left, #col-right {
+    display: flex; flex-direction: column; gap: 0.35rem; min-height: 0;
+  }
+
+  /* Body pose */
   .pose-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.25rem;
     font-family: 'Consolas', 'Courier New', monospace;
   }
   .pose-item { text-align: center; }
-  .pose-label { font-size: 0.7rem; color: #8b949e; margin-bottom: 0.1rem; }
-  .pose-val   { font-size: 1.1rem; color: #79c0ff; }
+  .pose-label { font-size: 0.63rem; color: #8b949e; }
+  .pose-val   { font-size: 0.95rem; color: #79c0ff; }
 
-  .sticks { display: flex; gap: 1.5rem; align-items: center; margin-bottom: 0.6rem; }
+  /* Controller */
+  .sticks { display: flex; gap: 0.9rem; align-items: center; margin-bottom: 0.35rem; }
   .stick-wrap { text-align: center; }
-  .stick-label { font-size: 0.7rem; color: #8b949e; margin-bottom: 0.3rem; }
+  .stick-label { font-size: 0.63rem; color: #8b949e; margin-bottom: 0.15rem; }
   canvas { display: block; border-radius: 50%; }
-
-  .btns { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; }
+  .btns { display: flex; flex-wrap: wrap; gap: 0.2rem; }
   .btn {
-    padding: 0.2rem 0.55rem; border-radius: 4px; font-size: 0.72rem;
-    background: #21262d; color: #8b949e; transition: background 0.08s, color 0.08s;
+    padding: 0.12rem 0.4rem; border-radius: 4px; font-size: 0.66rem;
+    background: #21262d; color: #8b949e;
   }
   .btn.on { background: #1a7f37; color: #aff3c8; }
 
-  .message { font-size: 0.85rem; color: #d29922; min-height: 1.2em; margin-bottom: 0.5rem; }
-
-  table.controls { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-  table.controls td { padding: 0.2rem 0.5rem 0.2rem 0; color: #8b949e; }
-  table.controls td:first-child { color: #c9d1d9; font-weight: 600; white-space: nowrap; }
-
+  /* Slider controls */
+  .ctrl-label { font-size: 0.69rem; color: #8b949e; margin-bottom: 0.1rem; }
+  .ctrl-row { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.2rem; }
+  .ctrl-val { font-family: monospace; font-size: 0.95rem; color: #79c0ff; min-width: 3.2rem; text-align: center; }
   .spdbtn {
     background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
-    border-radius: 4px; width: 2rem; height: 2rem; font-size: 1.1rem;
-    cursor: pointer; line-height: 1;
+    border-radius: 4px; width: 1.7rem; height: 1.7rem; font-size: 0.95rem;
+    cursor: pointer; line-height: 1; flex-shrink: 0;
   }
   .spdbtn:active { background: #1f6feb; }
-
-  .speedbar-track {
-    height: 12px; background: #21262d; border-radius: 6px;
-    margin-top: 0.4rem; overflow: hidden;
-    cursor: pointer; touch-action: none;
+  .bar-track {
+    flex: 1; height: 7px; background: #21262d; border-radius: 4px;
+    overflow: hidden; cursor: pointer; touch-action: none;
   }
-  .speedbar-fill {
-    height: 100%; border-radius: 6px;
-    background: linear-gradient(90deg, #1f6feb 0%, #58a6ff 100%);
-    transition: width 0.15s ease;
+  .bar-fill {
+    height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, #1f6feb, #58a6ff);
+    transition: width 0.1s ease;
   }
 
+  /* Speed 2-col sub-grid */
+  .speed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+
+  /* Gait buttons */
+  .gait-btns { display: flex; gap: 0.3rem; margin-bottom: 0.3rem; }
   .gait-btn {
-    padding: 0.3rem 0.9rem; border-radius: 4px; font-size: 0.82rem;
+    flex: 1; padding: 0.22rem 0; border-radius: 4px; font-size: 0.76rem;
     background: #21262d; color: #8b949e; border: 1px solid #30363d;
-    cursor: pointer; transition: background 0.1s, color 0.1s, border-color 0.1s;
+    cursor: pointer; text-align: center;
   }
-  .gait-btn.active {
-    background: #1f6feb33; color: #58a6ff; border-color: #1f6feb;
+  .gait-btn.active { background: #1f6feb33; color: #58a6ff; border-color: #1f6feb; }
+
+  /* Config buttons */
+  .cfg-btns { display: flex; gap: 0.35rem; margin-top: 0.35rem; }
+  .cfg-btn {
+    flex: 1; padding: 0.28rem; border-radius: 4px; font-size: 0.76rem; font-weight: 600;
+    cursor: pointer; border: 1px solid #30363d;
   }
+  .cfg-save  { background: #1a7f3733; color: #3fb950; border-color: #238636; }
+  .cfg-save:active  { background: #1a7f37; }
+  .cfg-reset { background: #9e6a0333; color: #d29922; border-color: #9e6a03; }
+  .cfg-reset:active { background: #9e6a03; color: #fff; }
+
+  /* Collapsible controls reference */
+  details.panel summary {
+    cursor: pointer; color: #58a6ff; font-size: 0.69rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em; list-style: none;
+  }
+  details.panel summary::before { content: '▶  '; }
+  details[open].panel summary::before { content: '▼  '; }
+  details.panel .ref-wrap { margin-top: 0.35rem; overflow-y: auto; max-height: 180px; }
+  table.controls { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+  table.controls td { padding: 0.12rem 0.35rem 0.12rem 0; color: #8b949e; }
+  table.controls td:first-child { color: #c9d1d9; font-weight: 600; white-space: nowrap; }
+  table.controls .sh td { color: #58a6ff; font-size: 0.65rem; padding-top: 0.35rem; }
 </style>
 </head>
 <body>
-<h1>&#129264; Hexapod</h1>
 
-<div class="row">
-  <span class="badge off" id="b-ws">WS: …</span>
-  <span class="badge off" id="b-gp">Controller: none</span>
-  <span class="badge off" id="b-robot">Sitting</span>
-  <span class="badge off" id="b-ik">IK err: 0</span>
-  <button class="badge warn" id="btn-store" onclick="sendCommand('store')" style="cursor:pointer;border:none">&#9660; Store</button>
-</div>
-
-<p class="message" id="msg"></p>
-<p class="message" id="msg-ik" style="font-size:0.75rem;color:#d29922;min-height:1em"></p>
-
-<div class="panel">
-  <h2>Body Pose</h2>
-  <div class="pose-grid">
-    <div class="pose-item"><div class="pose-label">X forward</div><div class="pose-val" id="px">—</div></div>
-    <div class="pose-item"><div class="pose-label">Y left</div><div class="pose-val" id="py">—</div></div>
-    <div class="pose-item"><div class="pose-label">Z up</div><div class="pose-val" id="pz">—</div></div>
-    <div class="pose-item"><div class="pose-label">Roll</div><div class="pose-val" id="pr">—</div></div>
-    <div class="pose-item"><div class="pose-label">Pitch</div><div class="pose-val" id="pp">—</div></div>
-    <div class="pose-item"><div class="pose-label">Yaw</div><div class="pose-val" id="pw">—</div></div>
+<div id="hdr">
+  <div id="hdr-top">
+    <h1>&#129264; Hexapod</h1>
+    <span class="badge off" id="b-ws">WS: …</span>
+    <span class="badge off" id="b-gp">Controller: none</span>
+    <span class="badge off" id="b-robot">Sitting</span>
+    <span class="badge off" id="b-ik">IK 0</span>
+    <button class="badge warn" onclick="sendCommand('store')" style="cursor:pointer;border:1px solid #9e6a03">&#9660; Store</button>
+  </div>
+  <div id="msg-area">
+    <span id="msg"></span>
+    <span id="msg-ik" style="font-size:0.68rem;color:#8b949e;margin-left:0.4rem"></span>
   </div>
 </div>
 
-<div class="panel">
-  <h2>Controller</h2>
-  <p id="hint" style="color:#d29922;font-size:0.85rem;margin-bottom:0.6rem">
-    &#128269; Press any button on your controller to activate it.
-  </p>
-  <div class="sticks">
-    <div class="stick-wrap">
-      <div class="stick-label">Left stick</div>
-      <canvas id="ls" width="72" height="72"></canvas>
-    </div>
-    <div class="stick-wrap">
-      <div class="stick-label">Right stick</div>
-      <canvas id="rs" width="72" height="72"></canvas>
-    </div>
-    <div style="flex:1">
-      <div class="stick-label" style="margin-bottom:0.4rem">Triggers</div>
-      <div style="font-family:monospace;font-size:0.85rem;color:#79c0ff">
-        LT <span id="lt-val">0.00</span> &nbsp; RT <span id="rt-val">0.00</span>
+<div id="main">
+
+  <!-- LEFT: pose + controller -->
+  <div id="col-left">
+
+    <div class="panel">
+      <h2>Body Pose</h2>
+      <div class="pose-grid">
+        <div class="pose-item"><div class="pose-label">X fwd</div><div class="pose-val" id="px">—</div></div>
+        <div class="pose-item"><div class="pose-label">Y left</div><div class="pose-val" id="py">—</div></div>
+        <div class="pose-item"><div class="pose-label">Z up</div><div class="pose-val" id="pz">—</div></div>
+        <div class="pose-item"><div class="pose-label">Roll</div><div class="pose-val" id="pr">—</div></div>
+        <div class="pose-item"><div class="pose-label">Pitch</div><div class="pose-val" id="pp">—</div></div>
+        <div class="pose-item"><div class="pose-label">Yaw</div><div class="pose-val" id="pw">—</div></div>
       </div>
     </div>
-  </div>
-  <div class="btns" id="btns"></div>
-</div>
 
-<div class="panel">
-  <h2>Speed</h2>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
-    <div>
-      <div style="font-size:0.75rem;color:#8b949e;margin-bottom:0.3rem">Translate (cm/s) &nbsp;<span style="color:#8b949e;font-size:0.7rem">D-pad ↑↓</span></div>
-      <div style="display:flex;align-items:center;gap:0.4rem">
-        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('cm',-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
-        <span id="spd-cm" style="font-family:monospace;font-size:1.1rem;color:#79c0ff;min-width:3rem;text-align:center">15.0</span>
-        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('cm',+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
+    <div class="panel" style="flex:1 1 0;min-height:0">
+      <h2>Controller</h2>
+      <p id="hint" style="color:#d29922;font-size:0.76rem;margin-bottom:0.3rem">&#128269; Press any button to activate.</p>
+      <div class="sticks">
+        <div class="stick-wrap">
+          <div class="stick-label">Left</div>
+          <canvas id="ls" width="56" height="56"></canvas>
+        </div>
+        <div class="stick-wrap">
+          <div class="stick-label">Right</div>
+          <canvas id="rs" width="56" height="56"></canvas>
+        </div>
+        <div>
+          <div class="stick-label" style="margin-bottom:0.25rem">Triggers</div>
+          <div style="font-family:monospace;font-size:0.78rem;color:#79c0ff">
+            LT <span id="lt-val">0.00</span><br>RT <span id="rt-val">0.00</span>
+          </div>
+        </div>
       </div>
-      <div class="speedbar-track" id="track-cm"><div class="speedbar-fill" id="bar-cm" style="width:100%"></div></div>
+      <div class="btns" id="btns"></div>
     </div>
-    <div>
-      <div style="font-size:0.75rem;color:#8b949e;margin-bottom:0.3rem">Rotate (°/s) &nbsp;<span style="color:#8b949e;font-size:0.7rem">D-pad ←→</span></div>
-      <div style="display:flex;align-items:center;gap:0.4rem">
-        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('deg',-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
-        <span id="spd-deg" style="font-family:monospace;font-size:1.1rem;color:#79c0ff;min-width:3rem;text-align:center">60.0</span>
-        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('deg',+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
-      </div>
-      <div class="speedbar-track" id="track-deg"><div class="speedbar-fill" id="bar-deg" style="width:100%"></div></div>
-    </div>
-  </div>
-</div>
 
-<div class="panel">
-  <h2>Walk Settings</h2>
-  <div style="margin-bottom:0.75rem">
-    <div style="font-size:0.75rem;color:#8b949e;margin-bottom:0.4rem">
-      Gait &nbsp;<span style="color:#8b949e;font-size:0.7rem">Walk: Back button cycles</span>
-    </div>
-    <div style="display:flex;gap:0.4rem">
-      <button class="gait-btn" id="gait-tripod" onclick="selectGait('tripod')">Tripod</button>
-      <button class="gait-btn" id="gait-ripple" onclick="selectGait('ripple')">Ripple</button>
-      <button class="gait-btn" id="gait-wave"   onclick="selectGait('wave')">Wave</button>
-    </div>
-    <div style="font-size:0.7rem;color:#8b949e;margin-top:0.35rem">
-      Tripod: 3 legs · fast &nbsp;|&nbsp; Ripple: 2 legs · medium &nbsp;|&nbsp; Wave: 1 leg · stable
-    </div>
   </div>
-  <div>
-    <div style="font-size:0.75rem;color:#8b949e;margin-bottom:0.3rem">
-      Foot Reach (cm) &nbsp;<span style="color:#8b949e;font-size:0.7rem">Walk: LB/RB</span>
+
+  <!-- RIGHT: speed + walk settings + controls ref -->
+  <div id="col-right">
+
+    <div class="panel">
+      <h2>Speed</h2>
+      <div class="speed-grid">
+        <div>
+          <div class="ctrl-label">Translate (cm/s) <span style="font-size:0.62rem">D-pad ↑↓</span></div>
+          <div class="ctrl-row">
+            <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('cm',-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
+            <span class="ctrl-val" id="spd-cm">15.0</span>
+            <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('cm',+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
+            <div class="bar-track" id="track-cm"><div class="bar-fill" id="bar-cm" style="width:100%"></div></div>
+          </div>
+        </div>
+        <div>
+          <div class="ctrl-label">Rotate (°/s) <span style="font-size:0.62rem">D-pad ←→</span></div>
+          <div class="ctrl-row">
+            <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('deg',-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
+            <span class="ctrl-val" id="spd-deg">60.0</span>
+            <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSpeed('deg',+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
+            <div class="bar-track" id="track-deg"><div class="bar-fill" id="bar-deg" style="width:100%"></div></div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div style="display:flex;align-items:center;gap:0.4rem">
-      <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustReach(-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
-      <span id="reach-val" style="font-family:monospace;font-size:1.1rem;color:#79c0ff;min-width:3rem;text-align:center">17.4</span>
-      <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustReach(+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
-    </div>
-    <div class="speedbar-track" id="track-reach"><div class="speedbar-fill" id="bar-reach" style="width:39%"></div></div>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.75rem">
-    <div>
-      <div style="font-size:0.75rem;color:#8b949e;margin-bottom:0.3rem">Step Height (cm)</div>
-      <div style="display:flex;align-items:center;gap:0.4rem">
+
+    <div class="panel" style="flex:1 1 0;min-height:0">
+      <h2>Walk Settings</h2>
+
+      <div class="ctrl-label">Gait <span style="font-size:0.62rem">Walk: Back cycles</span></div>
+      <div class="gait-btns">
+        <button class="gait-btn" id="gait-tripod" onclick="selectGait('tripod')">Tripod</button>
+        <button class="gait-btn" id="gait-ripple" onclick="selectGait('ripple')">Ripple</button>
+        <button class="gait-btn" id="gait-wave"   onclick="selectGait('wave')">Wave</button>
+      </div>
+
+      <div class="ctrl-label">Foot Reach (cm) <span style="font-size:0.62rem">Walk: LB/RB</span></div>
+      <div class="ctrl-row">
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustReach(-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
+        <span class="ctrl-val" id="reach-val">17.4</span>
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustReach(+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
+        <div class="bar-track" id="track-reach"><div class="bar-fill" id="bar-reach" style="width:39%"></div></div>
+      </div>
+
+      <div class="ctrl-label">Step Height (cm)</div>
+      <div class="ctrl-row">
         <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepH(-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
-        <span id="step-h-val" style="font-family:monospace;font-size:1.1rem;color:#79c0ff;min-width:3rem;text-align:center">4.0</span>
+        <span class="ctrl-val" id="step-h-val">4.0</span>
         <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepH(+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
+        <div class="bar-track" id="track-step-h"><div class="bar-fill" id="bar-step-h" style="width:27%"></div></div>
       </div>
-      <div class="speedbar-track" id="track-step-h"><div class="speedbar-fill" id="bar-step-h" style="width:27%"></div></div>
-    </div>
-    <div>
-      <div style="font-size:0.75rem;color:#8b949e;margin-bottom:0.3rem">Step Duration (s)</div>
-      <div style="display:flex;align-items:center;gap:0.4rem">
-        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepT(-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
-        <span id="step-t-val" style="font-family:monospace;font-size:1.1rem;color:#79c0ff;min-width:3rem;text-align:center">0.40</span>
-        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepT(+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
-      </div>
-      <div class="speedbar-track" id="track-step-t"><div class="speedbar-fill" id="bar-step-t" style="width:29%"></div></div>
-    </div>
-  </div>
-</div>
 
-<div class="panel">
-  <h2>Controls</h2>
-  <table class="controls">
-    <tr><td>A</td><td>Stand</td><td>B</td><td>Sit</td></tr>
-    <tr><td>X</td><td>Toggle walk / pose</td><td>Y</td><td>Storage mode</td></tr>
-    <tr><td>Back (standing)</td><td>Enter free mode</td><td>Back (free)</td><td>Exit free mode</td></tr>
-    <tr><td>Start</td><td>Reset to neutral</td><td></td><td></td></tr>
-    <tr><td colspan="4" style="color:#58a6ff;padding-top:0.5rem;font-size:0.75rem">POSE MODE</td></tr>
-    <tr><td>Left stick</td><td>Translate body X/Y</td><td>Right stick</td><td>Roll / Pitch</td></tr>
-    <tr><td>LT / RT</td><td>Body down / up</td><td>LB / RB</td><td>Yaw left / right</td></tr>
-    <tr><td colspan="4" style="color:#58a6ff;padding-top:0.5rem;font-size:0.75rem">WALK MODE (tripod / ripple / wave)</td></tr>
-    <tr><td>Left stick</td><td>Walk direction</td><td>Right stick X</td><td>Turn left / right</td></tr>
-    <tr><td>LT / RT</td><td>Body height</td><td>LB / RB</td><td>Foot reach in / out</td></tr>
-    <tr><td>Back</td><td>Cycle gait (tripod→ripple→wave)</td><td></td><td></td></tr>
-    <tr><td colspan="4" style="color:#58a6ff;padding-top:0.5rem;font-size:0.75rem">FREE MODE</td></tr>
-    <tr><td>Left stick</td><td>Walk direction (steps when needed)</td><td>Right stick X</td><td>Roll</td></tr>
-    <tr><td>Right stick Y</td><td>Pitch</td><td>LB / RB</td><td>Turn left / right</td></tr>
-    <tr><td>LT / RT</td><td>Body height</td><td></td><td>Reach via web UI</td></tr>
-    <tr><td>D-pad ↑/↓</td><td>Speed ±0.5 cm/s</td><td>D-pad ←/→</td><td>Turn rate ±2 °/s</td></tr>
-  </table>
+      <div class="ctrl-label">Step Duration (s)</div>
+      <div class="ctrl-row">
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepT(-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
+        <span class="ctrl-val" id="step-t-val">0.40</span>
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepT(+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
+        <div class="bar-track" id="track-step-t"><div class="bar-fill" id="bar-step-t" style="width:29%"></div></div>
+      </div>
+
+      <div class="ctrl-label">Free Step Threshold (cm)</div>
+      <div class="ctrl-row">
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepThr(-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
+        <span class="ctrl-val" id="step-thr-val">3.0</span>
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustStepThr(+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
+        <div class="bar-track" id="track-step-thr"><div class="bar-fill" id="bar-step-thr" style="width:34%"></div></div>
+      </div>
+
+      <div class="cfg-btns">
+        <button class="cfg-btn cfg-save"  onclick="sendCommand('save_config')">&#128190; Save Config</button>
+        <button class="cfg-btn cfg-reset" onclick="sendCommand('reset_config')">&#8635; Reset Defaults</button>
+      </div>
+    </div>
+
+    <details class="panel">
+      <summary>Controls Reference</summary>
+      <div class="ref-wrap">
+        <table class="controls">
+          <tr><td>A</td><td>Stand</td><td>B</td><td>Sit</td></tr>
+          <tr><td>X</td><td>Toggle walk/pose</td><td>Y</td><td>Storage mode</td></tr>
+          <tr><td>Back (standing)</td><td>Enter free mode</td><td>Back (free)</td><td>Exit free mode</td></tr>
+          <tr><td>Start</td><td>Reset neutral</td><td></td><td></td></tr>
+          <tr class="sh"><td colspan="4">POSE MODE</td></tr>
+          <tr><td>Left stick</td><td>Translate X/Y</td><td>Right stick</td><td>Roll / Pitch</td></tr>
+          <tr><td>LT / RT</td><td>Height</td><td>LB / RB</td><td>Yaw</td></tr>
+          <tr class="sh"><td colspan="4">WALK MODE</td></tr>
+          <tr><td>Left stick</td><td>Walk direction</td><td>Right stick X</td><td>Turn</td></tr>
+          <tr><td>LT / RT</td><td>Height</td><td>LB / RB</td><td>Foot reach</td></tr>
+          <tr><td>Back</td><td>Cycle gait</td><td>D-pad ↑↓</td><td>Speed ±cm/s</td></tr>
+          <tr class="sh"><td colspan="4">FREE MODE</td></tr>
+          <tr><td>Left stick</td><td>Walk (reactive)</td><td>Right stick</td><td>Roll / Pitch</td></tr>
+          <tr><td>LT / RT</td><td>Height</td><td>LB / RB</td><td>Turn</td></tr>
+        </table>
+      </div>
+    </details>
+
+  </div>
 </div>
 
 <script>
 const BTN_NAMES = ['A','B','X','Y','LB','RB','LT','RT','Back','Start','L3','R3','↑','↓','←','→','Home'];
 
-// --- WebSocket ---
 let ws, wsOk = false;
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${proto}//${location.host}/ws`);
-  ws.onopen  = () => { wsOk = true;  badge('b-ws', 'WS: Connected', 'ok'); };
-  ws.onclose = () => { wsOk = false; badge('b-ws', 'WS: Disconnected', 'warn'); setTimeout(connect, 2000); };
+  ws.onopen  = () => { wsOk = true;  badge('b-ws', 'WS: OK',  'ok'); };
+  ws.onclose = () => { wsOk = false; badge('b-ws', 'WS: …',   'warn'); setTimeout(connect, 2000); };
   ws.onmessage = ev => updateStatus(JSON.parse(ev.data));
 }
 
 function badge(id, text, cls) {
   const el = document.getElementById(id);
-  el.textContent = text;
-  el.className = 'badge ' + cls;
+  el.textContent = text; el.className = 'badge ' + cls;
 }
 
-// Speed / reach / step state (kept locally to avoid needing a round-trip before the first +/− click)
-let localSpeedCm  = 15.0;
-let localSpeedDeg = 60.0;
-let localReach    = 17.4;
-let localStepH    = 4.0;
-let localStepT    = 0.40;
+let localSpeedCm = 15.0, localSpeedDeg = 60.0, localReach = 17.4;
+let localStepH = 4.0, localStepT = 0.40, localStepThr = 3.0;
 const STEP_CM = 0.5, STEP_DEG = 2.0, STEP_REACH = 0.5;
 const MIN_CM = 0.5, MAX_CM = 30.0, MIN_DEG = 2.0, MAX_DEG = 120.0;
 const MIN_REACH = 12.0, MAX_REACH = 26.0;
-const STEP_H_STEP = 0.5, STEP_T_STEP = 0.05;
+const STEP_H_STEP = 0.5, STEP_T_STEP = 0.05, STEP_THR_STEP = 0.25;
 const STEP_H_MIN = 1.0, STEP_H_MAX = 12.0, STEP_T_MIN = 0.15, STEP_T_MAX = 1.0;
+const STEP_THR_MIN = 0.5, STEP_THR_MAX = 8.0;
 
 function sendCommand(cmd) {
-  if (wsOk) ws.send(JSON.stringify({ type: 'command', cmd: cmd }));
+  if (wsOk) ws.send(JSON.stringify({type:'command', cmd}));
 }
 
 function updateStatus(d) {
-  if (d.busy)               badge('b-robot', 'Busy…',    'warn');
-  else if (d.stored)        badge('b-robot', 'Stored',   'warn');
-  else if (d.free_mode)     badge('b-robot', 'Free',     'ok');
-  else if (d.walk_mode)     badge('b-robot', 'Walking',  'ok');
-  else if (d.standing)      badge('b-robot', 'Standing', 'good');
-  else                      badge('b-robot', 'Sitting',  'off');
+  if (d.busy)           badge('b-robot', 'Busy…',    'warn');
+  else if (d.stored)    badge('b-robot', 'Stored',   'warn');
+  else if (d.free_mode) badge('b-robot', 'Free',     'ok');
+  else if (d.walk_mode) badge('b-robot', 'Walking',  'ok');
+  else if (d.standing)  badge('b-robot', 'Standing', 'good');
+  else                  badge('b-robot', 'Sitting',  'off');
   document.getElementById('msg').textContent = d.message || '';
   const p = d.pose;
   if (p && 'x' in p) {
-    setText('px', p.x.toFixed(1) + ' cm');
-    setText('py', p.y.toFixed(1) + ' cm');
-    setText('pz', p.z.toFixed(1) + ' cm');
+    setText('px', p.x.toFixed(1));
+    setText('py', p.y.toFixed(1));
+    setText('pz', p.z.toFixed(1));
     setText('pr', p.roll.toFixed(1)  + '°');
     setText('pp', p.pitch.toFixed(1) + '°');
     setText('pw', p.yaw.toFixed(1)   + '°');
-  } else {
-    ['px','py','pz','pr','pp','pw'].forEach(id => setText(id, '—'));
-  }
-  // Sync speed / reach / gait display from server
-  if (d.speed_cm  !== undefined) { localSpeedCm  = d.speed_cm;  setSpeed('cm',  d.speed_cm);  }
-  if (d.speed_deg !== undefined) { localSpeedDeg = d.speed_deg; setSpeed('deg', d.speed_deg); }
-  if (d.reach       !== undefined) { localReach = d.reach;         setReach(d.reach); }
-  if (d.step_height !== undefined) { localStepH = d.step_height;   setStepH(d.step_height); }
-  if (d.step_time   !== undefined) { localStepT = d.step_time;     setStepT(d.step_time); }
+  } else { ['px','py','pz','pr','pp','pw'].forEach(id => setText(id, '—')); }
+  if (d.speed_cm       !== undefined) { localSpeedCm  = d.speed_cm;       setSpeed('cm',  d.speed_cm); }
+  if (d.speed_deg      !== undefined) { localSpeedDeg = d.speed_deg;      setSpeed('deg', d.speed_deg); }
+  if (d.reach          !== undefined) { localReach    = d.reach;          setReach(d.reach); }
+  if (d.step_height    !== undefined) { localStepH    = d.step_height;    setStepH(d.step_height); }
+  if (d.step_time      !== undefined) { localStepT    = d.step_time;      setStepT(d.step_time); }
+  if (d.step_threshold !== undefined) { localStepThr  = d.step_threshold; setStepThr(d.step_threshold); }
   if (d.gait_type !== undefined && d.gait_type !== localGait) { localGait = d.gait_type; setGait(d.gait_type); }
   if (d.ik_errors !== undefined) {
     const el = document.getElementById('b-ik');
-    el.textContent = 'IK err: ' + d.ik_errors;
+    el.textContent = 'IK ' + d.ik_errors;
     el.className = 'badge ' + (d.ik_errors > 0 ? 'warn' : 'off');
     document.getElementById('msg-ik').textContent = d.last_ik_error || '';
   }
@@ -1026,141 +1115,83 @@ function setText(id, v) { document.getElementById(id).textContent = v; }
 function setSpeed(axis, val) {
   if (axis === 'cm') {
     setText('spd-cm', val.toFixed(1));
-    document.getElementById('bar-cm').style.width =
-      ((val - MIN_CM) / (MAX_CM - MIN_CM) * 100).toFixed(1) + '%';
+    document.getElementById('bar-cm').style.width = ((val-MIN_CM)/(MAX_CM-MIN_CM)*100).toFixed(1)+'%';
   } else {
     setText('spd-deg', val.toFixed(1));
-    document.getElementById('bar-deg').style.width =
-      ((val - MIN_DEG) / (MAX_DEG - MIN_DEG) * 100).toFixed(1) + '%';
+    document.getElementById('bar-deg').style.width = ((val-MIN_DEG)/(MAX_DEG-MIN_DEG)*100).toFixed(1)+'%';
   }
 }
-
-function setReach(val) {
-  setText('reach-val', val.toFixed(1));
-  document.getElementById('bar-reach').style.width =
-    ((val - MIN_REACH) / (MAX_REACH - MIN_REACH) * 100).toFixed(1) + '%';
-}
+function setReach(v)   { setText('reach-val',    v.toFixed(1));  document.getElementById('bar-reach').style.width   = ((v-MIN_REACH)/(MAX_REACH-MIN_REACH)*100).toFixed(1)+'%'; }
+function setStepH(v)   { setText('step-h-val',   v.toFixed(1));  document.getElementById('bar-step-h').style.width  = ((v-STEP_H_MIN)/(STEP_H_MAX-STEP_H_MIN)*100).toFixed(1)+'%'; }
+function setStepT(v)   { setText('step-t-val',   v.toFixed(2));  document.getElementById('bar-step-t').style.width  = ((v-STEP_T_MIN)/(STEP_T_MAX-STEP_T_MIN)*100).toFixed(1)+'%'; }
+function setStepThr(v) { setText('step-thr-val', v.toFixed(2));  document.getElementById('bar-step-thr').style.width = ((v-STEP_THR_MIN)/(STEP_THR_MAX-STEP_THR_MIN)*100).toFixed(1)+'%'; }
 
 function adjustSpeed(axis, dir) {
-  if (axis === 'cm') {
-    localSpeedCm = Math.max(MIN_CM,  Math.min(MAX_CM,  +(localSpeedCm  + dir * STEP_CM).toFixed(1)));
-    setSpeed('cm', localSpeedCm);
-  } else {
-    localSpeedDeg = Math.max(MIN_DEG, Math.min(MAX_DEG, +(localSpeedDeg + dir * STEP_DEG).toFixed(1)));
-    setSpeed('deg', localSpeedDeg);
-  }
-  if (wsOk) ws.send(JSON.stringify({ type: 'speed', speed_cm: localSpeedCm, speed_deg: localSpeedDeg }));
+  if (axis === 'cm') { localSpeedCm  = Math.max(MIN_CM,  Math.min(MAX_CM,  +(localSpeedCm  + dir*STEP_CM).toFixed(1)));  setSpeed('cm',  localSpeedCm); }
+  else               { localSpeedDeg = Math.max(MIN_DEG, Math.min(MAX_DEG, +(localSpeedDeg + dir*STEP_DEG).toFixed(1))); setSpeed('deg', localSpeedDeg); }
+  if (wsOk) ws.send(JSON.stringify({type:'speed', speed_cm:localSpeedCm, speed_deg:localSpeedDeg}));
 }
+function adjustReach(dir)    { localReach   = Math.max(MIN_REACH,  Math.min(MAX_REACH,  +(localReach   + dir*STEP_REACH).toFixed(1)));   setReach(localReach);    if (wsOk) ws.send(JSON.stringify({type:'reach',         reach:localReach})); }
+function adjustStepH(dir)    { localStepH   = Math.max(STEP_H_MIN, Math.min(STEP_H_MAX, +(localStepH   + dir*STEP_H_STEP).toFixed(1)));  setStepH(localStepH);    if (wsOk) ws.send(JSON.stringify({type:'step_height',   value:localStepH})); }
+function adjustStepT(dir)    { localStepT   = Math.max(STEP_T_MIN, Math.min(STEP_T_MAX, +(localStepT   + dir*STEP_T_STEP).toFixed(2)));  setStepT(localStepT);    if (wsOk) ws.send(JSON.stringify({type:'step_time',     value:localStepT})); }
+function adjustStepThr(dir)  { localStepThr = Math.max(STEP_THR_MIN, Math.min(STEP_THR_MAX, +(localStepThr + dir*STEP_THR_STEP).toFixed(2))); setStepThr(localStepThr); if (wsOk) ws.send(JSON.stringify({type:'step_threshold', value:localStepThr})); }
 
-function adjustReach(dir) {
-  localReach = Math.max(MIN_REACH, Math.min(MAX_REACH, +(localReach + dir * STEP_REACH).toFixed(1)));
-  setReach(localReach);
-  if (wsOk) ws.send(JSON.stringify({ type: 'reach', reach: localReach }));
-}
-
-function setStepH(val) {
-  setText('step-h-val', val.toFixed(1));
-  document.getElementById('bar-step-h').style.width =
-    ((val - STEP_H_MIN) / (STEP_H_MAX - STEP_H_MIN) * 100).toFixed(1) + '%';
-}
-function setStepT(val) {
-  setText('step-t-val', val.toFixed(2));
-  document.getElementById('bar-step-t').style.width =
-    ((val - STEP_T_MIN) / (STEP_T_MAX - STEP_T_MIN) * 100).toFixed(1) + '%';
-}
-function adjustStepH(dir) {
-  localStepH = Math.max(STEP_H_MIN, Math.min(STEP_H_MAX, +(localStepH + dir * STEP_H_STEP).toFixed(1)));
-  setStepH(localStepH);
-  if (wsOk) ws.send(JSON.stringify({ type: 'step_height', value: localStepH }));
-}
-function adjustStepT(dir) {
-  localStepT = Math.max(STEP_T_MIN, Math.min(STEP_T_MAX, +(localStepT + dir * STEP_T_STEP).toFixed(2)));
-  setStepT(localStepT);
-  if (wsOk) ws.send(JSON.stringify({ type: 'step_time', value: localStepT }));
-}
-
-// Long-press auto-repeat for +/− buttons
 let _pressTimer = null, _pressInterval = null;
-function _pressStart(fn) {
-  fn();
-  _pressTimer = setTimeout(() => { _pressInterval = setInterval(fn, 80); }, 450);
-}
-function _pressStop() {
-  clearTimeout(_pressTimer); clearInterval(_pressInterval);
-  _pressTimer = _pressInterval = null;
-}
+function _pressStart(fn) { fn(); _pressTimer = setTimeout(() => { _pressInterval = setInterval(fn, 80); }, 450); }
+function _pressStop()    { clearTimeout(_pressTimer); clearInterval(_pressInterval); _pressTimer = _pressInterval = null; }
 
-// Draggable slider tracks
-function _makeDraggable(trackId, min, max, setter) {
+function _makeDraggable(trackId, min, max, decimals, sender) {
   const track = document.getElementById(trackId);
   if (!track) return;
   let active = false;
   function fromPointer(e) {
     const rect = track.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    setter(+(min + ratio * (max - min)).toFixed(1));
+    sender(+(min + Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))*(max-min)).toFixed(decimals));
   }
-  track.addEventListener('pointerdown', e => {
-    e.preventDefault(); active = true; track.setPointerCapture(e.pointerId); fromPointer(e);
-  });
+  track.addEventListener('pointerdown', e => { e.preventDefault(); active=true; track.setPointerCapture(e.pointerId); fromPointer(e); });
   track.addEventListener('pointermove', e => { if (active) fromPointer(e); });
-  track.addEventListener('pointerup',     () => { active = false; });
-  track.addEventListener('pointercancel', () => { active = false; });
+  track.addEventListener('pointerup',     () => { active=false; });
+  track.addEventListener('pointercancel', () => { active=false; });
 }
 
 let localGait = 'tripod';
-function selectGait(g) {
-  localGait = g;
-  setGait(g);
-  if (wsOk) ws.send(JSON.stringify({ type: 'gait', gait: g }));
-}
+function selectGait(g) { localGait=g; setGait(g); if (wsOk) ws.send(JSON.stringify({type:'gait', gait:g})); }
 function setGait(g) {
-  ['tripod','ripple','wave'].forEach(name => {
-    const el = document.getElementById('gait-' + name);
-    if (el) el.className = 'gait-btn' + (name === g ? ' active' : '');
+  ['tripod','ripple','wave'].forEach(n => {
+    const el = document.getElementById('gait-'+n);
+    if (el) el.className = 'gait-btn' + (n===g?' active':'');
   });
 }
 
-// --- Gamepad ---
-// seenIdx tracks which gamepad indices have had their button UI created
 const seenIdx = new Set();
-
 function activateGamepad(gp) {
   if (seenIdx.has(gp.index)) return;
   seenIdx.add(gp.index);
-  badge('b-gp', gp.id.slice(0, 28), 'ok');
+  badge('b-gp', gp.id.slice(0,26), 'ok');
   document.getElementById('hint').style.display = 'none';
   const wrap = document.getElementById('btns');
   wrap.innerHTML = '';
-  BTN_NAMES.forEach((n, i) => {
+  BTN_NAMES.forEach((n,i) => {
     const d = document.createElement('span');
-    d.className = 'btn'; d.id = `bn${i}`; d.textContent = n;
-    wrap.appendChild(d);
+    d.className='btn'; d.id=`bn${i}`; d.textContent=n; wrap.appendChild(d);
   });
 }
-
-// gamepadconnected only fires on first button press — also catch already-active pads in the loop
 window.addEventListener('gamepadconnected',    e => activateGamepad(e.gamepad));
 window.addEventListener('gamepaddisconnected', e => {
   seenIdx.delete(e.gamepad.index);
-  if (!seenIdx.size) {
-    badge('b-gp', 'Controller: none', 'off');
-    document.getElementById('hint').style.display = '';
-  }
+  if (!seenIdx.size) { badge('b-gp','Controller: none','off'); document.getElementById('hint').style.display=''; }
 });
 
 function drawStick(id, x, y) {
-  const c = document.getElementById(id), ctx = c.getContext('2d');
-  const cx = c.width/2, cy = c.height/2, r = cx - 3;
-  ctx.clearRect(0, 0, c.width, c.height);
-  ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.stroke();
-  ctx.strokeStyle = '#30363d';
-  [[cx-r,cy,cx+r,cy],[cx,cy-r,cx,cy+r]].forEach(([x1,y1,x2,y2]) => {
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-  });
-  ctx.fillStyle = '#58a6ff';
-  ctx.beginPath(); ctx.arc(cx + x*r*0.88, cy + y*r*0.88, 5, 0, 2*Math.PI); ctx.fill();
+  const c=document.getElementById(id), ctx=c.getContext('2d');
+  const cx=c.width/2, cy=c.height/2, r=cx-2;
+  ctx.clearRect(0,0,c.width,c.height);
+  ctx.strokeStyle='#21262d'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI); ctx.stroke();
+  ctx.strokeStyle='#30363d';
+  [[cx-r,cy,cx+r,cy],[cx,cy-r,cx,cy+r]].forEach(([x1,y1,x2,y2])=>{ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); });
+  ctx.fillStyle='#58a6ff';
+  ctx.beginPath(); ctx.arc(cx+x*r*0.88, cy+y*r*0.88, 4, 0, 2*Math.PI); ctx.fill();
 }
 
 let lastSend = 0;
@@ -1168,43 +1199,32 @@ function loop() {
   requestAnimationFrame(loop);
   const gps = navigator.getGamepads();
   let gp = null;
-  for (const g of gps) { if (g) { gp = g; break; } }
-
+  for (const g of gps) { if (g) { gp=g; break; } }
   if (!gp) return;
-
-  // Catch pads that were already active before the page loaded
   activateGamepad(gp);
-
-  drawStick('ls', gp.axes[0] || 0, gp.axes[1] || 0);
-  drawStick('rs', gp.axes[2] || 0, gp.axes[3] || 0);
-  setText('lt-val', (gp.buttons[6]?.value || 0).toFixed(2));
-  setText('rt-val', (gp.buttons[7]?.value || 0).toFixed(2));
-
-  BTN_NAMES.forEach((_, i) => {
-    const el = document.getElementById(`bn${i}`);
-    if (el) el.className = 'btn' + (gp.buttons[i]?.pressed ? ' on' : '');
+  drawStick('ls', gp.axes[0]||0, gp.axes[1]||0);
+  drawStick('rs', gp.axes[2]||0, gp.axes[3]||0);
+  setText('lt-val', (gp.buttons[6]?.value||0).toFixed(2));
+  setText('rt-val', (gp.buttons[7]?.value||0).toFixed(2));
+  BTN_NAMES.forEach((_,i) => {
+    const el=document.getElementById(`bn${i}`);
+    if (el) el.className='btn'+(gp.buttons[i]?.pressed?' on':'');
   });
-
-  const now = performance.now();
-  if (now - lastSend < 1000/30 || !wsOk) return;
-  lastSend = now;
-  ws.send(JSON.stringify({
-    axes:      Array.from(gp.axes),
-    buttons:   Array.from(gp.buttons, b => b.value),
-    connected: true,
-  }));
+  const now=performance.now();
+  if (now-lastSend < 1000/30 || !wsOk) return;
+  lastSend=now;
+  ws.send(JSON.stringify({axes:Array.from(gp.axes), buttons:Array.from(gp.buttons,b=>b.value), connected:true}));
 }
 
 connect();
 setGait('tripod');
-function _sendSpeeds() {
-  if (wsOk) ws.send(JSON.stringify({type:'speed', speed_cm: localSpeedCm, speed_deg: localSpeedDeg}));
-}
-_makeDraggable('track-cm',    MIN_CM,    MAX_CM,    v => { localSpeedCm  = v; setSpeed('cm',  v); _sendSpeeds(); });
-_makeDraggable('track-deg',   MIN_DEG,   MAX_DEG,   v => { localSpeedDeg = v; setSpeed('deg', v); _sendSpeeds(); });
-_makeDraggable('track-reach',  MIN_REACH,  MAX_REACH,  v => { localReach = v; setReach(v);   if (wsOk) ws.send(JSON.stringify({type:'reach',       reach: v})); });
-_makeDraggable('track-step-h', STEP_H_MIN, STEP_H_MAX, v => { localStepH = v; setStepH(v);  if (wsOk) ws.send(JSON.stringify({type:'step_height', value: v})); });
-_makeDraggable('track-step-t', STEP_T_MIN, STEP_T_MAX, v => { localStepT = v; setStepT(v);  if (wsOk) ws.send(JSON.stringify({type:'step_time',   value: v})); });
+function _sendSpeeds() { if (wsOk) ws.send(JSON.stringify({type:'speed', speed_cm:localSpeedCm, speed_deg:localSpeedDeg})); }
+_makeDraggable('track-cm',       MIN_CM,       MAX_CM,       1, v=>{localSpeedCm=v;  setSpeed('cm',v);   _sendSpeeds();});
+_makeDraggable('track-deg',      MIN_DEG,      MAX_DEG,      1, v=>{localSpeedDeg=v; setSpeed('deg',v);  _sendSpeeds();});
+_makeDraggable('track-reach',    MIN_REACH,    MAX_REACH,    1, v=>{localReach=v;    setReach(v);    if(wsOk)ws.send(JSON.stringify({type:'reach',         reach:v}));});
+_makeDraggable('track-step-h',   STEP_H_MIN,   STEP_H_MAX,   1, v=>{localStepH=v;   setStepH(v);   if(wsOk)ws.send(JSON.stringify({type:'step_height',   value:v}));});
+_makeDraggable('track-step-t',   STEP_T_MIN,   STEP_T_MAX,   2, v=>{localStepT=v;   setStepT(v);   if(wsOk)ws.send(JSON.stringify({type:'step_time',     value:v}));});
+_makeDraggable('track-step-thr', STEP_THR_MIN, STEP_THR_MAX, 2, v=>{localStepThr=v; setStepThr(v); if(wsOk)ws.send(JSON.stringify({type:'step_threshold', value:v}));});
 requestAnimationFrame(loop);
 </script>
 </body>
@@ -1259,8 +1279,16 @@ def build_app(shared: SharedState) -> FastAPI:
                         shared.set_step_height(data.get("value", 4.0))
                     elif data.get("type") == "step_time":
                         shared.set_step_time(data.get("value", 0.40))
+                    elif data.get("type") == "step_threshold":
+                        shared.set_step_threshold(data.get("value", FREE_STEP_THRESHOLD))
                     elif data.get("type") == "command":
-                        shared.request_command(data.get("cmd", ""))
+                        cmd = data.get("cmd", "")
+                        if cmd == "save_config":
+                            save_config(shared)
+                        elif cmd == "reset_config":
+                            apply_config(DEFAULT_CONFIG, shared)
+                        else:
+                            shared.request_command(cmd)
                     else:
                         shared.set_gamepad(
                             data.get("axes", []),
@@ -1290,6 +1318,7 @@ def main() -> None:
     args = parser.parse_args()
 
     shared  = SharedState()
+    apply_config(load_config(), shared)
     ctrl    = ControlThread(args.port, shared)
     ctrl.start()
 
