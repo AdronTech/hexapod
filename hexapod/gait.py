@@ -28,9 +28,10 @@ Turntable targets:
 import math
 from dataclasses import replace
 
-from hexapod.body_ik import BodyPose, corner_pos
-from hexapod.kinematics import COXA_LEN, FEMUR_LEN
+from hexapod.body_ik import BodyPose, body_pose_ik, corner_pos
+from hexapod.kinematics import COXA_LEN, FEMUR_LEN, IKError
 from hexapod.robot.config import Leg
+from hexapod.robot.soft_limits import SoftLimits
 
 # ---------------------------------------------------------------------------
 # Phase tables
@@ -414,6 +415,8 @@ class FreeGait(_GaitBase):
         step_reach_max: float = COXA_LEN + FEMUR_LEN + 8.0,
         step_reach_min: float = COXA_LEN + 2.0,
         step_emergency_threshold: float = 6.0,
+        soft_limits: "SoftLimits | None" = None,
+        soft_limit_margin_deg: float = 15.0,
     ) -> None:
         super().__init__(initial_pose, initial_feet,
                          step_height=step_height, neutral_reach=neutral_reach)
@@ -422,6 +425,8 @@ class FreeGait(_GaitBase):
         self.step_emergency_threshold = step_emergency_threshold
         self._step_reach_max          = step_reach_max
         self._step_reach_min          = step_reach_min
+        self._soft_limits             = soft_limits
+        self._soft_limit_margin_deg   = soft_limit_margin_deg
         self._swinging:     dict[Leg, bool]  = {leg: False for leg in Leg}
         self._swing_t:      dict[Leg, float] = {leg: 0.0   for leg in Leg}
         self._swing_start:  FootMap = {}
@@ -450,12 +455,14 @@ class FreeGait(_GaitBase):
                 self._swinging[leg]   = False
                 self._foot_world[leg] = self._swing_target[leg]
 
-        # Collect grounded legs that need to step, largest error first
-        candidates: list[tuple[float, Leg]] = [
-            (self._foot_error(leg), leg)
-            for leg in Leg
-            if not self._swinging[leg] and self._foot_error(leg) > self.step_threshold
-        ]
+        # Collect grounded legs that need to step, largest urgency first
+        candidates: list[tuple[float, Leg]] = []
+        for leg in Leg:
+            if self._swinging[leg]:
+                continue
+            urgency = self._foot_urgency(leg)
+            if urgency > self.step_threshold:
+                candidates.append((urgency, leg))
         candidates.sort(reverse=True)
 
         swing_count = sum(1 for s in self._swinging.values() if s)
@@ -477,6 +484,25 @@ class FreeGait(_GaitBase):
         nx, ny, _ = self._neutral_foot_world(leg)
         fx, fy    = self._foot_world[leg][0], self._foot_world[leg][1]
         return math.hypot(fx - nx, fy - ny)
+
+    def _foot_urgency(self, leg: Leg) -> float:
+        """XY drift from neutral, boosted when any joint approaches a soft limit."""
+        drift = self._foot_error(leg)
+        if self._soft_limits is None:
+            return drift
+        try:
+            angles = body_pose_ik(self._body, {leg: self._foot_world[leg]})
+        except IKError:
+            return self.step_emergency_threshold
+        c, f, t = angles[leg]
+        sl = self._soft_limits
+        min_margin = min(
+            c - sl.coxa.min_deg,  sl.coxa.max_deg  - c,
+            f - sl.femur.min_deg, sl.femur.max_deg - f,
+            t - sl.tibia.min_deg, sl.tibia.max_deg - t,
+        )
+        limit_urgency = self.step_threshold * (1.0 - min_margin / self._soft_limit_margin_deg)
+        return max(drift, limit_urgency)
 
     def _swing_target_for(
         self, leg: Leg, vx: float, vy: float, omega_deg: float

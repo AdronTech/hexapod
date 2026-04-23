@@ -70,6 +70,8 @@ DEFAULT_HTTP_PORT   = 8080
 
 CONFIG_PATH = Path(__file__).parent / "hexapod_config.json"
 
+from hexapod.control.state import SOFT_LIMIT_MARGIN_DEG_DEFAULT
+
 FREE_STEP_THRESHOLD = 3.0  # must match state.py default
 
 # ---------------------------------------------------------------------------
@@ -337,6 +339,14 @@ HTML = r"""<!DOCTYPE html>
         <div class="bar-track" id="track-step-thr"><div class="bar-fill" id="bar-step-thr" style="width:34%"></div></div>
       </div>
 
+      <div class="ctrl-label">Soft Limit Margin (°)</div>
+      <div class="ctrl-row">
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSoftLimMargin(-1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">−</button>
+        <span class="ctrl-val" id="soft-lim-val">15</span>
+        <button class="spdbtn" onpointerdown="event.preventDefault();_pressStart(()=>adjustSoftLimMargin(+1))" onpointerup="_pressStop()" onpointerleave="_pressStop()">+</button>
+        <div class="bar-track" id="track-soft-lim"><div class="bar-fill" id="bar-soft-lim" style="width:25%"></div></div>
+      </div>
+
       <div class="cfg-btns">
         <button class="cfg-btn cfg-save"  onclick="sendCommand('save_config')">&#128190; Save Config</button>
         <button class="cfg-btn cfg-reset" onclick="sendCommand('reset_config')">&#8635; Reset Defaults</button>
@@ -386,13 +396,14 @@ function badge(id, text, cls) {
 }
 
 let localSpeedCm = 15.0, localSpeedDeg = 60.0, localReach = 17.4;
-let localStepH = 4.0, localStepT = 0.40, localStepThr = 3.0;
+let localStepH = 4.0, localStepT = 0.40, localStepThr = 3.0, localSoftLimMargin = 15.0;
 const STEP_CM = 0.5, STEP_DEG = 2.0, STEP_REACH = 0.5;
 const MIN_CM = 0.5, MAX_CM = 30.0, MIN_DEG = 2.0, MAX_DEG = 120.0;
 const MIN_REACH = 12.0, MAX_REACH = 26.0;
 const STEP_H_STEP = 0.5, STEP_T_STEP = 0.05, STEP_THR_STEP = 0.25;
 const STEP_H_MIN = 1.0, STEP_H_MAX = 12.0, STEP_T_MIN = 0.15, STEP_T_MAX = 1.0;
 const STEP_THR_MIN = 0.5, STEP_THR_MAX = 8.0;
+const SOFT_LIM_STEP = 1.0, SOFT_LIM_MIN = 5.0, SOFT_LIM_MAX = 45.0;
 
 function sendCommand(cmd) {
   if (wsOk) ws.send(JSON.stringify({type:'command', cmd}));
@@ -421,6 +432,7 @@ function updateStatus(d) {
   if (d.step_height    !== undefined) { localStepH    = d.step_height;    setStepH(d.step_height); }
   if (d.step_time      !== undefined) { localStepT    = d.step_time;      setStepT(d.step_time); }
   if (d.step_threshold !== undefined) { localStepThr  = d.step_threshold; setStepThr(d.step_threshold); }
+  if (d.soft_limit_margin_deg !== undefined) { localSoftLimMargin = d.soft_limit_margin_deg; setSoftLimMargin(d.soft_limit_margin_deg); }
   if (d.gait_type !== undefined && d.gait_type !== localGait) { localGait = d.gait_type; setGait(d.gait_type); }
   if (d.ik_errors !== undefined) {
     const el = document.getElementById('b-ik');
@@ -445,6 +457,7 @@ function setReach(v)   { setText('reach-val',    v.toFixed(1));  document.getEle
 function setStepH(v)   { setText('step-h-val',   v.toFixed(1));  document.getElementById('bar-step-h').style.width  = ((v-STEP_H_MIN)/(STEP_H_MAX-STEP_H_MIN)*100).toFixed(1)+'%'; }
 function setStepT(v)   { setText('step-t-val',   v.toFixed(2));  document.getElementById('bar-step-t').style.width  = ((v-STEP_T_MIN)/(STEP_T_MAX-STEP_T_MIN)*100).toFixed(1)+'%'; }
 function setStepThr(v) { setText('step-thr-val', v.toFixed(2));  document.getElementById('bar-step-thr').style.width = ((v-STEP_THR_MIN)/(STEP_THR_MAX-STEP_THR_MIN)*100).toFixed(1)+'%'; }
+function setSoftLimMargin(v) { setText('soft-lim-val', v.toFixed(0)); document.getElementById('bar-soft-lim').style.width = ((v-SOFT_LIM_MIN)/(SOFT_LIM_MAX-SOFT_LIM_MIN)*100).toFixed(1)+'%'; }
 
 function adjustSpeed(axis, dir) {
   if (axis === 'cm') { localSpeedCm  = Math.max(MIN_CM,  Math.min(MAX_CM,  +(localSpeedCm  + dir*STEP_CM).toFixed(1)));  setSpeed('cm',  localSpeedCm); }
@@ -455,6 +468,7 @@ function adjustReach(dir)    { localReach   = Math.max(MIN_REACH,  Math.min(MAX_
 function adjustStepH(dir)    { localStepH   = Math.max(STEP_H_MIN, Math.min(STEP_H_MAX, +(localStepH   + dir*STEP_H_STEP).toFixed(1)));  setStepH(localStepH);    if (wsOk) ws.send(JSON.stringify({type:'step_height',   value:localStepH})); }
 function adjustStepT(dir)    { localStepT   = Math.max(STEP_T_MIN, Math.min(STEP_T_MAX, +(localStepT   + dir*STEP_T_STEP).toFixed(2)));  setStepT(localStepT);    if (wsOk) ws.send(JSON.stringify({type:'step_time',     value:localStepT})); }
 function adjustStepThr(dir)  { localStepThr = Math.max(STEP_THR_MIN, Math.min(STEP_THR_MAX, +(localStepThr + dir*STEP_THR_STEP).toFixed(2))); setStepThr(localStepThr); if (wsOk) ws.send(JSON.stringify({type:'step_threshold', value:localStepThr})); }
+function adjustSoftLimMargin(dir) { localSoftLimMargin = Math.max(SOFT_LIM_MIN, Math.min(SOFT_LIM_MAX, +(localSoftLimMargin + dir*SOFT_LIM_STEP).toFixed(0))); setSoftLimMargin(localSoftLimMargin); if (wsOk) ws.send(JSON.stringify({type:'soft_limit_margin', value:localSoftLimMargin})); }
 
 let _pressTimer = null, _pressInterval = null;
 function _pressStart(fn) { fn(); _pressTimer = setTimeout(() => { _pressInterval = setInterval(fn, 80); }, 450); }
@@ -545,6 +559,7 @@ _makeDraggable('track-reach',    MIN_REACH,    MAX_REACH,    1, v=>{localReach=v
 _makeDraggable('track-step-h',   STEP_H_MIN,   STEP_H_MAX,   1, v=>{localStepH=v;   setStepH(v);   if(wsOk)ws.send(JSON.stringify({type:'step_height',   value:v}));});
 _makeDraggable('track-step-t',   STEP_T_MIN,   STEP_T_MAX,   2, v=>{localStepT=v;   setStepT(v);   if(wsOk)ws.send(JSON.stringify({type:'step_time',     value:v}));});
 _makeDraggable('track-step-thr', STEP_THR_MIN, STEP_THR_MAX, 2, v=>{localStepThr=v; setStepThr(v); if(wsOk)ws.send(JSON.stringify({type:'step_threshold', value:v}));});
+_makeDraggable('track-soft-lim', SOFT_LIM_MIN, SOFT_LIM_MAX, 0, v=>{localSoftLimMargin=v; setSoftLimMargin(v); if(wsOk)ws.send(JSON.stringify({type:'soft_limit_margin', value:v}));});
 requestAnimationFrame(loop);
 </script>
 </body>
@@ -601,6 +616,8 @@ def build_app(shared: SharedState) -> FastAPI:
                         shared.set_step_time(data.get("value", 0.40))
                     elif data.get("type") == "step_threshold":
                         shared.set_step_threshold(data.get("value", FREE_STEP_THRESHOLD))
+                    elif data.get("type") == "soft_limit_margin":
+                        shared.set_soft_limit_margin_deg(data.get("value", SOFT_LIMIT_MARGIN_DEG_DEFAULT))
                     elif data.get("type") == "command":
                         cmd = data.get("cmd", "")
                         if cmd == "save_config":

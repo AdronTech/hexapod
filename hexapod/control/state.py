@@ -39,6 +39,9 @@ REACH_RATE_CMS         = 3.0         # cm/s change rate when LB/RB held in walk 
 FREE_STEP_THRESHOLD    = 3.0         # cm from neutral before free-gait triggers a step
 FREE_STEP_EMERGENCY    = 6.0         # cm — overrides adjacency constraint
 STEP_THRESHOLD_MIN, STEP_THRESHOLD_MAX = 0.5, 8.0
+SOFT_LIMIT_MARGIN_DEG_DEFAULT = 15.0
+SOFT_LIMIT_MARGIN_DEG_MIN     =  5.0
+SOFT_LIMIT_MARGIN_DEG_MAX     = 45.0
 
 GAITS = ["tripod", "ripple", "wave"]
 
@@ -46,13 +49,14 @@ STORAGE_FEMUR_DEG = 90.0    # raise femur this many degrees above horizontal
 STORAGE_TIBIA_DEG = -80.0   # fold tibia this many degrees inward
 
 DEFAULT_CONFIG: dict = {
-    "speed_cm":       DEFAULT_RATE_CM,
-    "speed_deg":      DEFAULT_RATE_DEG,
-    "reach":          _NEUTRAL_REACH,
-    "step_height":    4.0,
-    "step_time":      0.40,
-    "gait_type":      "tripod",
-    "step_threshold": FREE_STEP_THRESHOLD,
+    "speed_cm":              DEFAULT_RATE_CM,
+    "speed_deg":             DEFAULT_RATE_DEG,
+    "reach":                 _NEUTRAL_REACH,
+    "step_height":           4.0,
+    "step_time":             0.40,
+    "gait_type":             "tripod",
+    "step_threshold":        FREE_STEP_THRESHOLD,
+    "soft_limit_margin_deg": SOFT_LIMIT_MARGIN_DEG_DEFAULT,
 }
 
 
@@ -80,6 +84,7 @@ def apply_config(cfg: dict, shared: "SharedState") -> None:
     shared.set_step_time(cfg.get("step_time", 0.40))
     shared.set_gait_type(cfg.get("gait_type", "tripod"))
     shared.set_step_threshold(cfg.get("step_threshold", FREE_STEP_THRESHOLD))
+    shared.set_soft_limit_margin_deg(cfg.get("soft_limit_margin_deg", SOFT_LIMIT_MARGIN_DEG_DEFAULT))
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +107,7 @@ class SharedState:
         self._step_height:  float = 4.0
         self._step_time:    float = 0.40
         self._step_threshold: float = FREE_STEP_THRESHOLD
+        self._soft_limit_margin_deg: float = SOFT_LIMIT_MARGIN_DEG_DEFAULT
         # Written by control thread, read by WebSocket handler
         self._standing: bool   = False
         self._busy: bool       = False
@@ -157,6 +163,14 @@ class SharedState:
     def set_step_threshold(self, t: float) -> None:
         with self._lock:
             self._step_threshold = max(STEP_THRESHOLD_MIN, min(STEP_THRESHOLD_MAX, t))
+
+    def set_soft_limit_margin_deg(self, v: float) -> None:
+        with self._lock:
+            self._soft_limit_margin_deg = max(SOFT_LIMIT_MARGIN_DEG_MIN, min(SOFT_LIMIT_MARGIN_DEG_MAX, v))
+
+    def get_soft_limit_margin_deg(self) -> float:
+        with self._lock:
+            return self._soft_limit_margin_deg
 
     def get_step_params(self) -> tuple[float, float, float]:
         with self._lock:
@@ -231,9 +245,10 @@ class SharedState:
                 "speed_deg": self._speed_deg,
                 "reach":     self._reach,
                 "gait_type":      self._gait_type,
-                "step_height":    self._step_height,
-                "step_time":      self._step_time,
-                "step_threshold": self._step_threshold,
-                "ik_errors":      self._ik_errors,
+                "step_height":           self._step_height,
+                "step_time":             self._step_time,
+                "step_threshold":        self._step_threshold,
+                "soft_limit_margin_deg": self._soft_limit_margin_deg,
+                "ik_errors":             self._ik_errors,
                 "last_ik_error":  self._last_ik_error,
             }
