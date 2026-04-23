@@ -107,7 +107,6 @@ class ControlThread(threading.Thread):
             axes, buttons, gp_on = self._shared.get_gamepad()
             speed_cm, speed_deg  = self._shared.get_speeds()
             step_height, step_time, step_threshold = self._shared.get_step_params()
-            soft_limit_margin_deg = self._shared.get_soft_limit_margin_deg()
 
             n = max(len(buttons), 17)
             buttons = (buttons + [0.0] * n)[:n]
@@ -201,8 +200,6 @@ class ControlThread(threading.Thread):
                             step_emergency_threshold=FREE_STEP_EMERGENCY,
                             step_reach_max=REACH_MAX,
                             step_reach_min=REACH_MIN,
-                            soft_limits=limits,
-                            soft_limit_margin_deg=soft_limit_margin_deg,
                         )
                         free_mode = True
                         self._shared.set_status(
