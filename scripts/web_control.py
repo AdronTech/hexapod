@@ -145,42 +145,51 @@ HTML = r"""<!DOCTYPE html>
   .btn.on { background: #1a7f37; color: #aff3c8; }
 
   /* Slider controls */
-  .ctrl-label { font-size: 0.69rem; color: #8b949e; margin-bottom: 0.1rem; }
-  .ctrl-row { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.2rem; }
+  .ctrl-label { font-size: 0.69rem; color: #8b949e; margin-bottom: 0.15rem; }
+  .ctrl-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem; }
   .ctrl-val { font-family: monospace; font-size: 0.95rem; color: #79c0ff; min-width: 3.2rem; text-align: center; }
   .spdbtn {
     background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
-    border-radius: 4px; width: 1.7rem; height: 1.7rem; font-size: 0.95rem;
+    border-radius: 6px; width: 2.6rem; height: 2.6rem; font-size: 1.15rem;
     cursor: pointer; line-height: 1; flex-shrink: 0;
+    touch-action: manipulation;
   }
   .spdbtn:active { background: #1f6feb; }
   .bar-track {
-    flex: 1; height: 7px; background: #21262d; border-radius: 4px;
-    overflow: hidden; cursor: pointer; touch-action: none;
+    flex: 1; height: 14px; background: #21262d; border-radius: 7px;
+    cursor: pointer; touch-action: none; position: relative;
   }
   .bar-fill {
-    height: 100%; border-radius: 4px;
+    height: 100%; border-radius: 7px; position: relative;
     background: linear-gradient(90deg, #1f6feb, #58a6ff);
     transition: width 0.1s ease;
+  }
+  .bar-fill::after {
+    content: ''; position: absolute; right: 0; top: 50%;
+    transform: translate(50%, -50%);
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #e6edf3; border: 2px solid #58a6ff;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.55);
+    pointer-events: none;
   }
 
   /* Speed 2-col sub-grid */
   .speed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
 
   /* Gait buttons */
-  .gait-btns { display: flex; gap: 0.3rem; margin-bottom: 0.3rem; }
+  .gait-btns { display: flex; gap: 0.3rem; margin-bottom: 0.35rem; }
   .gait-btn {
-    flex: 1; padding: 0.22rem 0; border-radius: 4px; font-size: 0.76rem;
+    flex: 1; padding: 0.55rem 0; border-radius: 6px; font-size: 0.82rem;
     background: #21262d; color: #8b949e; border: 1px solid #30363d;
-    cursor: pointer; text-align: center;
+    cursor: pointer; text-align: center; touch-action: manipulation;
   }
   .gait-btn.active { background: #1f6feb33; color: #58a6ff; border-color: #1f6feb; }
 
   /* Config buttons */
-  .cfg-btns { display: flex; gap: 0.35rem; margin-top: 0.35rem; }
+  .cfg-btns { display: flex; gap: 0.35rem; margin-top: 0.4rem; }
   .cfg-btn {
-    flex: 1; padding: 0.28rem; border-radius: 4px; font-size: 0.76rem; font-weight: 600;
-    cursor: pointer; border: 1px solid #30363d;
+    flex: 1; padding: 0.55rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; border: 1px solid #30363d; touch-action: manipulation;
   }
   .cfg-save  { background: #1a7f3733; color: #3fb950; border-color: #238636; }
   .cfg-save:active  { background: #1a7f37; }
@@ -210,7 +219,7 @@ HTML = r"""<!DOCTYPE html>
     <span class="badge off" id="b-gp">Controller: none</span>
     <span class="badge off" id="b-robot">Sitting</span>
     <span class="badge off" id="b-ik">IK 0</span>
-    <button class="badge warn" onclick="sendCommand('store')" style="cursor:pointer;border:1px solid #9e6a03">&#9660; Store</button>
+    <button class="badge warn" onclick="sendCommand('store')" style="cursor:pointer;border:1px solid #9e6a03;touch-action:manipulation;padding:0.35rem 0.75rem">&#9660; Store</button>
   </div>
   <div id="msg-area">
     <span id="msg"></span>
