@@ -499,6 +499,11 @@ class ControlThread(threading.Thread):
         pose = BodyPose(z=STAND_HEIGHT)
         feet = self._neutral_feet()
         ticks = self._compute_ticks(pose, feet, limits)
+        # Sit and store leave the servos limp — without torque they ignore
+        # every goal position and the robot never gets up again.
+        for leg in Leg:
+            for joint in Joint:
+                bus.torque_enable(servo_id(leg, joint), True)
         targets = [
             (servo_id(leg, joint), ticks[leg][joint], STAND_SPEED)
             for leg in Leg

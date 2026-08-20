@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hexapod Simulator</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div id="hdr">
+  <h1>&#129302; Hexapod Simulator</h1>
+  <span class="badge off" id="b-ws">WS: …</span>
+  <span class="badge off" id="b-client">Bus idle</span>
+  <span class="badge off" id="b-stable">Support: —</span>
+  <span class="badge off" id="b-rate">0 pkt/s</span>
+  <button class="badge" id="btn-reset" title="Move the robot back to the world origin">&#8634; Reset position</button>
+  <span id="device">—</span>
+</div>
+
+<div id="main">
+
+  <div class="panel" id="view-panel">
+    <canvas id="view"></canvas>
+    <div id="view-hint">drag to orbit &middot; wheel to zoom &middot; double-click to reset camera</div>
+    <div id="view-info">
+      <div><span class="k">body height</span><span class="v" id="i-height">—</span></div>
+      <div><span class="k">roll / pitch</span><span class="v" id="i-tilt">—</span></div>
+      <div><span class="k">support margin</span><span class="v" id="i-margin">—</span></div>
+      <div><span class="k">feet down</span><span class="v" id="i-feet">—</span></div>
+      <div><span class="k">position</span><span class="v" id="i-world">—</span></div>
+      <div><span class="k">heading</span><span class="v" id="i-heading">—</span></div>
+    </div>
+  </div>
+
+  <div id="col-right">
+    <div class="panel grow">
+      <h2>Servos</h2>
+      <table id="servos">
+        <thead>
+          <tr><th>Leg</th><th>Coxa</th><th>Femur</th><th>Tibia</th><th>&deg;C</th></tr>
+        </thead>
+        <tbody id="servo-body"></tbody>
+      </table>
+      <p class="legend">
+        <span class="sw moving"></span> moving
+        <span class="sw limp"></span> torque off
+        &nbsp;&middot;&nbsp; tick (goal)
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>Bus</h2>
+      <div class="stat-grid">
+        <div><span class="k">packets</span><span class="v" id="s-packets">0</span></div>
+        <div><span class="k">responses</span><span class="v" id="s-responses">0</span></div>
+        <div><span class="k">bad checksum</span><span class="v" id="s-bad">0</span></div>
+        <div><span class="k">unknown id</span><span class="v" id="s-unknown">0</span></div>
+        <div><span class="k">last</span><span class="v" id="s-last">—</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
