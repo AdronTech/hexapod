@@ -578,7 +578,7 @@ def build_app(shared: SharedState) -> FastAPI:
                 while True:
                     await ws.send_text(json.dumps(shared.get_status()))
                     await asyncio.sleep(0.1)
-            except Exception:
+            except (WebSocketDisconnect, ConnectionError, RuntimeError):
                 pass
 
         send_task = asyncio.create_task(send_loop())

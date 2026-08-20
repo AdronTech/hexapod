@@ -30,7 +30,7 @@ from hexapod.kinematics import IKError, angle_to_tick
 from hexapod.robot.config import Joint, Leg, servo_id
 from hexapod.robot.soft_limits import SoftLimitError, SoftLimits
 from hexapod.servo.motion import MotionPlayer
-from hexapod.servo.protocol import ProtocolError  # noqa: F401 — may propagate
+from hexapod.servo.protocol import ProtocolError
 from hexapod.servo.st3020 import PositionCommand, ST3020Bus
 from hexapod.servo.transport import SerialTransport, TransportError
 
@@ -55,6 +55,10 @@ BTN_DRIGHT = 15
 
 AX_LSX, AX_LSY = 0, 1
 AX_RSX, AX_RSY = 2, 3
+
+# Failures a servo/IK operation can raise — reported through the status line
+# instead of killing the control thread.
+MOTION_ERRORS = (TransportError, ProtocolError, IKError, SoftLimitError, OSError)
 
 
 def _dead(v: float, deadzone: float = 0.12) -> float:
@@ -121,7 +125,7 @@ class ControlThread(threading.Thread):
                 try:
                     self._do_store(bus, limits)
                     self._shared.set_stored()
-                except Exception as e:
+                except MOTION_ERRORS as e:
                     self._shared.set_status(False, False, {}, f"Store failed: {e}")
                 pose = None
                 feet = None
@@ -138,7 +142,7 @@ class ControlThread(threading.Thread):
                     try:
                         self._do_store(bus, limits)
                         self._shared.set_stored()
-                    except Exception as e:
+                    except MOTION_ERRORS as e:
                         self._shared.set_status(False, False, {}, f"Store failed: {e}")
                     pose = None
                     feet = None
@@ -166,7 +170,7 @@ class ControlThread(threading.Thread):
                         self._shared.set_status(
                             True, False, self._pose_dict(pose), "Standing"
                         )
-                    except Exception as e:
+                    except MOTION_ERRORS as e:
                         self._shared.set_status(False, False, {}, f"Stand failed: {e}")
 
                 elif pressed[BTN_B] and standing:
@@ -175,7 +179,7 @@ class ControlThread(threading.Thread):
                     )
                     try:
                         self._do_sit(bus)
-                    except Exception:
+                    except MOTION_ERRORS:
                         pass
                     pose = None
                     feet = None
@@ -437,9 +441,11 @@ class ControlThread(threading.Thread):
         step_height: float = 4.0,
         step_time: float = 0.40,
     ):
-        kw = dict(
-            neutral_reach=_NEUTRAL_REACH, step_height=step_height, step_time=step_time
-        )
+        kw = {
+            "neutral_reach": _NEUTRAL_REACH,
+            "step_height": step_height,
+            "step_time": step_time,
+        }
         if gait_type == "ripple":
             return RippleGait(pose, feet, **kw)
         if gait_type == "wave":

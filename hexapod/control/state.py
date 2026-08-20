@@ -60,7 +60,7 @@ DEFAULT_CONFIG: dict = {
 def load_config(config_path: Path) -> dict:
     try:
         return {**DEFAULT_CONFIG, **json.loads(config_path.read_text())}
-    except Exception:
+    except (OSError, ValueError):
         return dict(DEFAULT_CONFIG)
 
 

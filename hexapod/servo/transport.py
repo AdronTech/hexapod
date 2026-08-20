@@ -1,3 +1,5 @@
+from typing import Self
+
 import serial
 
 
@@ -27,7 +29,7 @@ class SerialTransport:
         if self._serial and self._serial.is_open:
             self._serial.close()
 
-    def __enter__(self) -> "SerialTransport":
+    def __enter__(self) -> Self:
         self.open()
         return self
 

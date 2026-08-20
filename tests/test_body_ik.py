@@ -53,7 +53,7 @@ class TestCornerPos:
         assert_close(z, 0.0, msg="z")
 
     def test_mid_left_corner(self):
-        x, y, z = corner_pos(Leg.MID_LEFT)
+        x, y, _z = corner_pos(Leg.MID_LEFT)
         assert_close(x, 0.0, tol=1e-6, msg="x")
         assert_close(y, BODY_RADIUS, msg="y")
 
@@ -140,7 +140,6 @@ class TestBodyToLeg:
 class TestBodyPoseIK:
     def _neutral_world_feet(self, height: float = 0.0) -> dict[Leg, tuple]:
         """Neutral feet planted on the ground (world z=0) with body at *height*."""
-        pose = BodyPose(z=height)
         # neutral feet in body frame shifted to world by body z offset
         return {
             leg: (
@@ -169,7 +168,7 @@ class TestBodyPoseIK:
         angles = body_pose_ik(pose, feet_world)
         # All legs see the same geometry: neutral (x, 0, -tibia) in leg frame
         for leg in Leg:
-            tc, tf, tt = angles[leg]
+            tc, _tf, _tt = angles[leg]
             assert_close(tc, 0.0, tol=1e-4, msg=f"{leg} coxa at height")
 
     def test_yaw_corotation_is_identity(self):
