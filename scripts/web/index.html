@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hexapod</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div id="hdr">
+  <div id="hdr-top">
+    <h1>&#129264; Hexapod</h1>
+    <span class="badge off" id="b-ws">WS: …</span>
+    <span class="badge off" id="b-gp">Controller: none</span>
+    <span class="badge off" id="b-robot">Sitting</span>
+    <span class="badge off" id="b-ik">IK 0</span>
+    <button class="badge warn" id="btn-store" data-command="store">&#9660; Store</button>
+  </div>
+  <div id="msg-area">
+    <span id="msg"></span>
+    <span id="msg-ik"></span>
+  </div>
+</div>
+
+<div id="main">
+
+  <!-- LEFT: pose + controller -->
+  <div id="col-left">
+
+    <div class="panel">
+      <h2>Body Pose</h2>
+      <div class="pose-grid">
+        <div class="pose-item"><div class="pose-label">X fwd</div><div class="pose-val" id="px">—</div></div>
+        <div class="pose-item"><div class="pose-label">Y left</div><div class="pose-val" id="py">—</div></div>
+        <div class="pose-item"><div class="pose-label">Z up</div><div class="pose-val" id="pz">—</div></div>
+        <div class="pose-item"><div class="pose-label">Roll</div><div class="pose-val" id="pr">—</div></div>
+        <div class="pose-item"><div class="pose-label">Pitch</div><div class="pose-val" id="pp">—</div></div>
+        <div class="pose-item"><div class="pose-label">Yaw</div><div class="pose-val" id="pw">—</div></div>
+      </div>
+    </div>
+
+    <div class="panel grow">
+      <h2>Controller</h2>
+      <p id="hint">&#128269; Press any button to activate.</p>
+      <div class="sticks">
+        <div class="stick-wrap">
+          <div class="stick-label">Left</div>
+          <canvas id="ls" width="56" height="56"></canvas>
+        </div>
+        <div class="stick-wrap">
+          <div class="stick-label">Right</div>
+          <canvas id="rs" width="56" height="56"></canvas>
+        </div>
+        <div>
+          <div class="stick-label trigger-label">Triggers</div>
+          <div class="trigger-vals">
+            LT <span id="lt-val">0.00</span><br>RT <span id="rt-val">0.00</span>
+          </div>
+        </div>
+      </div>
+      <div class="btns" id="btns"></div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: speed + walk settings + controls ref -->
+  <div id="col-right">
+
+    <div class="panel">
+      <h2>Speed</h2>
+      <div class="speed-grid">
+        <div>
+          <div class="ctrl-label">Translate (cm/s) <span class="hint">D-pad ↑↓</span></div>
+          <div class="ctrl-row" data-ctrl="speed_cm">
+            <button class="spdbtn" data-dir="-1">−</button>
+            <span class="ctrl-val" data-role="value">15.0</span>
+            <button class="spdbtn" data-dir="1">+</button>
+            <div class="bar-track" data-role="track"><div class="bar-fill" data-role="bar"></div></div>
+          </div>
+        </div>
+        <div>
+          <div class="ctrl-label">Rotate (°/s) <span class="hint">D-pad ←→</span></div>
+          <div class="ctrl-row" data-ctrl="speed_deg">
+            <button class="spdbtn" data-dir="-1">−</button>
+            <span class="ctrl-val" data-role="value">60.0</span>
+            <button class="spdbtn" data-dir="1">+</button>
+            <div class="bar-track" data-role="track"><div class="bar-fill" data-role="bar"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel grow">
+      <h2>Walk Settings</h2>
+
+      <div class="ctrl-label">Gait <span class="hint">Walk: Back cycles</span></div>
+      <div class="gait-btns">
+        <button class="gait-btn" data-gait="tripod">Tripod</button>
+        <button class="gait-btn" data-gait="ripple">Ripple</button>
+        <button class="gait-btn" data-gait="wave">Wave</button>
+      </div>
+
+      <div class="ctrl-label">Foot Reach (cm) <span class="hint">Walk: LB/RB</span></div>
+      <div class="ctrl-row" data-ctrl="reach">
+        <button class="spdbtn" data-dir="-1">−</button>
+        <span class="ctrl-val" data-role="value">17.4</span>
+        <button class="spdbtn" data-dir="1">+</button>
+        <div class="bar-track" data-role="track"><div class="bar-fill" data-role="bar"></div></div>
+      </div>
+
+      <div class="ctrl-label">Step Height (cm)</div>
+      <div class="ctrl-row" data-ctrl="step_height">
+        <button class="spdbtn" data-dir="-1">−</button>
+        <span class="ctrl-val" data-role="value">4.0</span>
+        <button class="spdbtn" data-dir="1">+</button>
+        <div class="bar-track" data-role="track"><div class="bar-fill" data-role="bar"></div></div>
+      </div>
+
+      <div class="ctrl-label">Step Duration (s)</div>
+      <div class="ctrl-row" data-ctrl="step_time">
+        <button class="spdbtn" data-dir="-1">−</button>
+        <span class="ctrl-val" data-role="value">0.40</span>
+        <button class="spdbtn" data-dir="1">+</button>
+        <div class="bar-track" data-role="track"><div class="bar-fill" data-role="bar"></div></div>
+      </div>
+
+      <div class="ctrl-label">Free Step Threshold (cm)</div>
+      <div class="ctrl-row" data-ctrl="step_threshold">
+        <button class="spdbtn" data-dir="-1">−</button>
+        <span class="ctrl-val" data-role="value">3.00</span>
+        <button class="spdbtn" data-dir="1">+</button>
+        <div class="bar-track" data-role="track"><div class="bar-fill" data-role="bar"></div></div>
+      </div>
+
+      <div class="cfg-btns">
+        <button class="cfg-btn cfg-save" data-command="save_config">&#128190; Save Config</button>
+        <button class="cfg-btn cfg-reset" data-command="reset_config">&#8635; Reset Defaults</button>
+      </div>
+    </div>
+
+    <details class="panel">
+      <summary>Controls Reference</summary>
+      <div class="ref-wrap">
+        <table class="controls">
+          <tr><td>A</td><td>Stand</td><td>B</td><td>Sit</td></tr>
+          <tr><td>X</td><td>Toggle walk/pose</td><td>Y</td><td>Storage mode</td></tr>
+          <tr><td>Back (standing)</td><td>Enter free mode</td><td>Back (free)</td><td>Exit free mode</td></tr>
+          <tr><td>Start</td><td>Reset neutral</td><td></td><td></td></tr>
+          <tr class="sh"><td colspan="4">POSE MODE</td></tr>
+          <tr><td>Left stick</td><td>Translate X/Y</td><td>Right stick</td><td>Roll / Pitch</td></tr>
+          <tr><td>LT / RT</td><td>Height</td><td>LB / RB</td><td>Yaw</td></tr>
+          <tr class="sh"><td colspan="4">WALK MODE</td></tr>
+          <tr><td>Left stick</td><td>Walk direction</td><td>Right stick X</td><td>Turn</td></tr>
+          <tr><td>LT / RT</td><td>Height</td><td>LB / RB</td><td>Foot reach</td></tr>
+          <tr><td>Back</td><td>Cycle gait</td><td>D-pad ↑↓</td><td>Speed ±cm/s</td></tr>
+          <tr class="sh"><td colspan="4">FREE MODE</td></tr>
+          <tr><td>Left stick</td><td>Walk (reactive)</td><td>Right stick</td><td>Roll / Pitch</td></tr>
+          <tr><td>LT / RT</td><td>Height</td><td>LB / RB</td><td>Turn</td></tr>
+        </table>
+      </div>
+    </details>
+
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
