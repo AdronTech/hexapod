@@ -149,7 +149,7 @@ def move_smooth(
         z = current[2] + t * dz
         tc, tf, tt = leg_ik(x, y, z)  # raises IKError if unreachable
         if limits:
-            limits.check(tc, tf, tt)   # raises SoftLimitError if violated
+            limits.check(tc, tf, tt)  # raises SoftLimitError if violated
         bus.sync_write_position(
             [
                 PositionCommand(
@@ -430,7 +430,9 @@ def main() -> None:
                     angle = tick_to_angle(JOINT_NAMES[joint], tick)
                     jlim = getattr(limits, JOINT_NAMES[joint])
                     if not jlim.contains(angle):
-                        print(f"  SoftLimitError: {JOINT_NAMES[joint]} {angle:+.1f}° outside [{jlim.min_deg:+.1f}°, {jlim.max_deg:+.1f}°]")
+                        print(
+                            f"  SoftLimitError: {JOINT_NAMES[joint]} {angle:+.1f}° outside [{jlim.min_deg:+.1f}°, {jlim.max_deg:+.1f}°]"
+                        )
                         continue
                 move(bus, ids[joint], tick)
                 time.sleep(0.1)
@@ -445,7 +447,9 @@ def main() -> None:
                 if limits:
                     jlim = getattr(limits, JOINT_NAMES[joint])
                     if not jlim.contains(deg):
-                        print(f"  SoftLimitError: {JOINT_NAMES[joint]} {deg:+.1f}° outside [{jlim.min_deg:+.1f}°, {jlim.max_deg:+.1f}°]")
+                        print(
+                            f"  SoftLimitError: {JOINT_NAMES[joint]} {deg:+.1f}° outside [{jlim.min_deg:+.1f}°, {jlim.max_deg:+.1f}°]"
+                        )
                         continue
                 tick = angle_to_tick(JOINT_NAMES[joint], deg)
                 move(bus, ids[joint], tick)

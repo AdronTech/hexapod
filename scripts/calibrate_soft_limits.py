@@ -41,7 +41,7 @@ DEFAULT_PORT = "/dev/ttyACM0"
 
 JOINT_NAMES = {Joint.COXA: "coxa", Joint.FEMUR: "femur", Joint.TIBIA: "tibia"}
 JOINT_HINTS = {
-    Joint.COXA:  "Rotate coxa left/right",
+    Joint.COXA: "Rotate coxa left/right",
     Joint.FEMUR: "Lift/lower the femur",
     Joint.TIBIA: "Bend/extend the tibia",
 }
@@ -110,9 +110,9 @@ def record_limit(bus: ST3020Bus, sid: int, joint: Joint, label: str) -> int | No
 def calibrate_joint(bus: ST3020Bus, sid: int, joint: Joint) -> JointLimits | None:
     """Record min and max for one joint. Returns JointLimits or None on quit."""
     name = JOINT_NAMES[joint]
-    print(f"\n{'─'*52}")
+    print(f"\n{'─' * 52}")
     print(f"  Joint: {name.upper()}  (servo ID {sid})")
-    print(f"{'─'*52}")
+    print(f"{'─' * 52}")
 
     tick_a = record_limit(bus, sid, joint, "MINIMUM limit")
     if tick_a is None:
@@ -134,7 +134,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Calibrate soft joint limits")
     parser.add_argument("--port", default=DEFAULT_PORT)
     parser.add_argument(
-        "--leg", type=int, default=1,
+        "--leg",
+        type=int,
+        default=1,
         choices=[l.value for l in Leg],
         help="Reference leg 1-6 (default: 1 = FRONT_RIGHT)",
     )
@@ -180,12 +182,12 @@ def main() -> None:
     out_path = Path(__file__).parent.parent / "soft_limits.json"
     soft.save(out_path)
 
-    print(f"\n{'='*52}")
+    print(f"\n{'=' * 52}")
     print(f"Saved: {out_path}")
     print(f"  coxa:  {soft.coxa.min_deg:+.1f}° .. {soft.coxa.max_deg:+.1f}°")
     print(f"  femur: {soft.femur.min_deg:+.1f}° .. {soft.femur.max_deg:+.1f}°")
     print(f"  tibia: {soft.tibia.min_deg:+.1f}° .. {soft.tibia.max_deg:+.1f}°")
-    print(f"{'='*52}")
+    print(f"{'=' * 52}")
 
 
 if __name__ == "__main__":

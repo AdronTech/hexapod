@@ -30,11 +30,11 @@ BODY_RADIUS: float = 8.85  # cm, center to coxa pivot corner
 # in the body frame (X = forward, Y = left).  From docs/kinematics.md.
 _CORNER_ANGLE: dict[Leg, float] = {
     Leg.FRONT_RIGHT: -30.0,
-    Leg.MID_RIGHT:   -90.0,
-    Leg.REAR_RIGHT:  -150.0,
-    Leg.REAR_LEFT:   +150.0,
-    Leg.MID_LEFT:    +90.0,
-    Leg.FRONT_LEFT:  +30.0,
+    Leg.MID_RIGHT: -90.0,
+    Leg.REAR_RIGHT: -150.0,
+    Leg.REAR_LEFT: +150.0,
+    Leg.MID_LEFT: +90.0,
+    Leg.FRONT_LEFT: +30.0,
 }
 
 
@@ -64,7 +64,10 @@ def neutral_foot_body(leg: Leg) -> tuple[float, float, float]:
 # Frame transform helpers
 # ---------------------------------------------------------------------------
 
-def _body_to_leg(leg: Leg, foot_body: tuple[float, float, float]) -> tuple[float, float, float]:
+
+def _body_to_leg(
+    leg: Leg, foot_body: tuple[float, float, float]
+) -> tuple[float, float, float]:
     """
     Transform a point from the body frame to the leg frame.
 
@@ -80,27 +83,25 @@ def _body_to_leg(leg: Leg, foot_body: tuple[float, float, float]) -> tuple[float
     pz = foot_body[2]
 
     # Rotate by -angle around Z so that the outward direction becomes +X
-    x_leg =  px * math.cos(a) + py * math.sin(a)
+    x_leg = px * math.cos(a) + py * math.sin(a)
     y_leg = -px * math.sin(a) + py * math.cos(a)
 
     return x_leg, y_leg, pz
 
 
-def _rotation_matrix_xyz(
-    roll: float, pitch: float, yaw: float
-) -> list[list[float]]:
+def _rotation_matrix_xyz(roll: float, pitch: float, yaw: float) -> list[list[float]]:
     """
     Intrinsic X→Y→Z rotation matrix (roll, then pitch, then yaw), angles in degrees.
     Transforms vectors from body frame to world frame: v_world = R * v_body.
     """
-    cr, sr = math.cos(math.radians(roll)),  math.sin(math.radians(roll))
+    cr, sr = math.cos(math.radians(roll)), math.sin(math.radians(roll))
     cp, sp = math.cos(math.radians(pitch)), math.sin(math.radians(pitch))
-    cy, sy = math.cos(math.radians(yaw)),   math.sin(math.radians(yaw))
+    cy, sy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
 
     return [
-        [ cy*cp,  cy*sp*sr - sy*cr,  cy*sp*cr + sy*sr],
-        [ sy*cp,  sy*sp*sr + cy*cr,  sy*sp*cr - cy*sr],
-        [-sp,     cp*sr,             cp*cr            ],
+        [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+        [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+        [-sp, cp * sr, cp * cr],
     ]
 
 
@@ -109,9 +110,9 @@ def _mat_transpose_vec(
 ) -> tuple[float, float, float]:
     """Multiply M^T by vector v (i.e. apply the inverse rotation)."""
     return (
-        m[0][0]*v[0] + m[1][0]*v[1] + m[2][0]*v[2],
-        m[0][1]*v[0] + m[1][1]*v[1] + m[2][1]*v[2],
-        m[0][2]*v[0] + m[1][2]*v[1] + m[2][2]*v[2],
+        m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2],
+        m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2],
+        m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2],
     )
 
 
@@ -156,6 +157,7 @@ def body_ik(
 # Layer 2: world-frame IK with body pose
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class BodyPose:
     """
@@ -176,12 +178,13 @@ class BodyPose:
         Rotation around the vertical (Z) axis, in degrees.
         Positive = turns left (CCW from above).
     """
+
     x: float = 0.0
     y: float = 0.0
     z: float = 0.0
-    roll:  float = 0.0
+    roll: float = 0.0
     pitch: float = 0.0
-    yaw:   float = 0.0
+    yaw: float = 0.0
 
 
 def body_pose_ik(

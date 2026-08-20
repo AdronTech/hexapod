@@ -18,18 +18,18 @@ from . import registers as R
 @dataclass
 class ServoFeedback:
     servo_id: int
-    position: int    # 0–4095 raw ticks
-    speed: int       # signed ticks/s, negative = reverse direction
-    load: int        # signed, 0–1000 (1000 = 100% max load)
-    voltage: float   # volts
-    temperature: int # °C
+    position: int  # 0–4095 raw ticks
+    speed: int  # signed ticks/s, negative = reverse direction
+    load: int  # signed, 0–1000 (1000 = 100% max load)
+    voltage: float  # volts
+    temperature: int  # °C
     moving: bool
 
 
 @dataclass
 class PositionCommand:
     servo_id: int
-    position: int    # 0–4095
+    position: int  # 0–4095
     speed: int = 300
     acc: int = 50
 

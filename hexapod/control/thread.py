@@ -39,19 +39,19 @@ from hexapod.servo.transport import SerialTransport, TransportError
 # Gamepad button / axis indices (Standard Gamepad API)
 # ---------------------------------------------------------------------------
 
-BTN_A      = 0
-BTN_B      = 1
-BTN_X      = 2
-BTN_Y      = 3
-BTN_LB     = 4
-BTN_RB     = 5
-BTN_LT     = 6
-BTN_RT     = 7
-BTN_BACK   = 8
-BTN_START  = 9
-BTN_DUP    = 12
-BTN_DDOWN  = 13
-BTN_DLEFT  = 14
+BTN_A = 0
+BTN_B = 1
+BTN_X = 2
+BTN_Y = 3
+BTN_LB = 4
+BTN_RB = 5
+BTN_LT = 6
+BTN_RT = 7
+BTN_BACK = 8
+BTN_START = 9
+BTN_DUP = 12
+BTN_DDOWN = 13
+BTN_DLEFT = 14
 BTN_DRIGHT = 15
 
 AX_LSX, AX_LSY = 0, 1
@@ -70,13 +70,13 @@ def _dead(v: float, deadzone: float = 0.12) -> float:
 # Control thread
 # ---------------------------------------------------------------------------
 
-class ControlThread(threading.Thread):
 
+class ControlThread(threading.Thread):
     def __init__(self, serial_port: str, shared: SharedState) -> None:
         super().__init__(daemon=True, name="control")
-        self._port   = serial_port
+        self._port = serial_port
         self._shared = shared
-        self._stop   = threading.Event()
+        self._stop = threading.Event()
 
     def stop(self) -> None:
         self._stop.set()
@@ -93,51 +93,60 @@ class ControlThread(threading.Thread):
             self._shared.set_status(False, False, {}, f"Serial error: {e}")
 
     def _loop(self, bus: ST3020Bus, limits: Optional[SoftLimits]) -> None:
-        pose:  Optional[BodyPose]                              = None
-        feet:  Optional[dict[Leg, tuple[float, float, float]]] = None
-        gait   = None
-        standing   = False
-        walk_mode  = False
-        free_mode  = False
-        prev_btns  = [0.0] * 17
+        pose: Optional[BodyPose] = None
+        feet: Optional[dict[Leg, tuple[float, float, float]]] = None
+        gait = None
+        standing = False
+        walk_mode = False
+        free_mode = False
+        prev_btns = [0.0] * 17
         active_gait_type = "tripod"
 
         while not self._stop.is_set():
             t0 = time.monotonic()
             axes, buttons, gp_on = self._shared.get_gamepad()
-            speed_cm, speed_deg  = self._shared.get_speeds()
+            speed_cm, speed_deg = self._shared.get_speeds()
             step_height, step_time, step_threshold = self._shared.get_step_params()
 
             n = max(len(buttons), 17)
             buttons = (buttons + [0.0] * n)[:n]
-            pressed = [
-                buttons[i] > 0.5 and prev_btns[i] <= 0.5
-                for i in range(n)
-            ]
+            pressed = [buttons[i] > 0.5 and prev_btns[i] <= 0.5 for i in range(n)]
             prev_btns = list(buttons)
 
             pending_cmd = self._shared.pop_command()
 
             if pending_cmd == "store" and not self._stop.is_set():
-                self._shared.set_status(standing, True, self._pose_dict(pose), "Storing…")
+                self._shared.set_status(
+                    standing, True, self._pose_dict(pose), "Storing…"
+                )
                 try:
                     self._do_store(bus, limits)
                     self._shared.set_stored()
                 except Exception as e:
                     self._shared.set_status(False, False, {}, f"Store failed: {e}")
-                pose = None; feet = None; gait = None
-                standing = False; walk_mode = False; free_mode = False
+                pose = None
+                feet = None
+                gait = None
+                standing = False
+                walk_mode = False
+                free_mode = False
 
             if gp_on and not self._stop.is_set():
                 if pressed[BTN_Y]:
-                    self._shared.set_status(standing, True, self._pose_dict(pose), "Storing…")
+                    self._shared.set_status(
+                        standing, True, self._pose_dict(pose), "Storing…"
+                    )
                     try:
                         self._do_store(bus, limits)
                         self._shared.set_stored()
                     except Exception as e:
                         self._shared.set_status(False, False, {}, f"Store failed: {e}")
-                    pose = None; feet = None; gait = None
-                    standing = False; walk_mode = False; free_mode = False
+                    pose = None
+                    feet = None
+                    gait = None
+                    standing = False
+                    walk_mode = False
+                    free_mode = False
                     continue
 
                 if buttons[BTN_DUP] > 0.5:
@@ -155,19 +164,29 @@ class ControlThread(threading.Thread):
                         result = self._do_stand(bus, limits)
                         pose, feet = result
                         standing = True
-                        self._shared.set_status(True, False, self._pose_dict(pose), "Standing")
+                        self._shared.set_status(
+                            True, False, self._pose_dict(pose), "Standing"
+                        )
                     except Exception as e:
                         self._shared.set_status(False, False, {}, f"Stand failed: {e}")
 
                 elif pressed[BTN_B] and standing:
-                    self._shared.set_status(True, True, self._pose_dict(pose), "Sitting down…")
+                    self._shared.set_status(
+                        True, True, self._pose_dict(pose), "Sitting down…"
+                    )
                     try:
                         self._do_sit(bus)
                     except Exception:
                         pass
-                    pose = None; feet = None; gait = None
-                    standing = False; walk_mode = False; free_mode = False
-                    self._shared.set_status(False, False, {}, "Sitting — press A to stand")
+                    pose = None
+                    feet = None
+                    gait = None
+                    standing = False
+                    walk_mode = False
+                    free_mode = False
+                    self._shared.set_status(
+                        False, False, {}, "Sitting — press A to stand"
+                    )
 
                 elif pressed[BTN_BACK] and standing:
                     if walk_mode:
@@ -175,12 +194,22 @@ class ControlThread(threading.Thread):
                         active_gait_type = GAITS[(idx + 1) % len(GAITS)]
                         self._shared.set_gait_type(active_gait_type)
                         if gait is not None:
-                            snapped = {leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()}
-                            gait = self._make_gait(active_gait_type, gait.body, snapped, step_height, step_time)
+                            snapped = {
+                                leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()
+                            }
+                            gait = self._make_gait(
+                                active_gait_type,
+                                gait.body,
+                                snapped,
+                                step_height,
+                                step_time,
+                            )
                     elif free_mode:
                         if gait is not None:
                             pose = replace(gait.body, roll=0.0, pitch=0.0)
-                            feet = {leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()}
+                            feet = {
+                                leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()
+                            }
                             try:
                                 ticks = self._compute_ticks(pose, feet, limits)
                                 self._apply_ticks(bus, ticks)
@@ -192,7 +221,8 @@ class ControlThread(threading.Thread):
                     elif pose is not None and feet is not None:
                         snapped = {leg: (f[0], f[1], 0.0) for leg, f in feet.items()}
                         gait = FreeGait(
-                            replace(pose, roll=0.0, pitch=0.0), snapped,
+                            replace(pose, roll=0.0, pitch=0.0),
+                            snapped,
                             neutral_reach=self._shared.get_reach(),
                             step_height=step_height,
                             step_time=step_time,
@@ -203,19 +233,33 @@ class ControlThread(threading.Thread):
                         )
                         free_mode = True
                         self._shared.set_status(
-                            True, False, self._pose_dict(gait.body), "Free", free_mode=True
+                            True,
+                            False,
+                            self._pose_dict(gait.body),
+                            "Free",
+                            free_mode=True,
                         )
 
-                elif pressed[BTN_X] and standing and not free_mode and pose is not None and feet is not None:
+                elif (
+                    pressed[BTN_X]
+                    and standing
+                    and not free_mode
+                    and pose is not None
+                    and feet is not None
+                ):
                     walk_mode = not walk_mode
                     if walk_mode:
                         active_gait_type = self._shared.get_gait_type()
                         snapped = {leg: (f[0], f[1], 0.0) for leg, f in feet.items()}
-                        gait = self._make_gait(active_gait_type, pose, snapped, step_height, step_time)
+                        gait = self._make_gait(
+                            active_gait_type, pose, snapped, step_height, step_time
+                        )
                     else:
                         if gait is not None:
                             pose = gait.body
-                            feet = {leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()}
+                            feet = {
+                                leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()
+                            }
                             try:
                                 ticks = self._compute_ticks(pose, feet, limits)
                                 self._apply_ticks(bus, ticks)
@@ -224,7 +268,9 @@ class ControlThread(threading.Thread):
                         gait = None
 
                 elif pressed[BTN_START] and standing and feet is not None:
-                    walk_mode = False; free_mode = False; gait = None
+                    walk_mode = False
+                    free_mode = False
+                    gait = None
                     neutral = BodyPose(z=STAND_HEIGHT)
                     neutral_feet = self._neutral_feet()
                     try:
@@ -232,14 +278,16 @@ class ControlThread(threading.Thread):
                         self._apply_ticks(bus, ticks)
                         pose = neutral
                         feet = neutral_feet
-                        self._shared.set_status(True, False, self._pose_dict(pose), "Pose reset")
+                        self._shared.set_status(
+                            True, False, self._pose_dict(pose), "Pose reset"
+                        )
                     except (IKError, SoftLimitError):
                         pass
 
                 elif standing and free_mode and gait is not None:
-                    yaw_rad   = math.radians(gait.body.yaw)
-                    body_vx   = -_dead(axes[AX_LSY]) * speed_cm
-                    body_vy   = -_dead(axes[AX_LSX]) * speed_cm
+                    yaw_rad = math.radians(gait.body.yaw)
+                    body_vx = -_dead(axes[AX_LSY]) * speed_cm
+                    body_vy = -_dead(axes[AX_LSX]) * speed_cm
                     vx = body_vx * math.cos(yaw_rad) - body_vy * math.sin(yaw_rad)
                     vy = body_vx * math.sin(yaw_rad) + body_vy * math.cos(yaw_rad)
 
@@ -258,11 +306,13 @@ class ControlThread(threading.Thread):
 
                     dpitch = -_dead(axes[AX_RSY]) * speed_deg * DT
                     if abs(dpitch) > 1e-9:
-                        gait.body_pitch = max(-30.0, min(30.0, gait.body_pitch + dpitch))
+                        gait.body_pitch = max(
+                            -30.0, min(30.0, gait.body_pitch + dpitch)
+                        )
 
-                    gait.neutral_reach  = self._shared.get_reach()
-                    gait.step_height    = step_height
-                    gait.step_time      = step_time
+                    gait.neutral_reach = self._shared.get_reach()
+                    gait.step_height = step_height
+                    gait.step_time = step_time
                     gait.step_threshold = step_threshold
 
                     new_pose, new_feet = gait.step(vx, vy, omega, DT)
@@ -282,13 +332,17 @@ class ControlThread(threading.Thread):
                     desired_gait = self._shared.get_gait_type()
                     if desired_gait != active_gait_type:
                         active_gait_type = desired_gait
-                        snapped = {leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()}
-                        gait = self._make_gait(active_gait_type, gait.body, snapped, step_height, step_time)
+                        snapped = {
+                            leg: (f[0], f[1], 0.0) for leg, f in gait.feet.items()
+                        }
+                        gait = self._make_gait(
+                            active_gait_type, gait.body, snapped, step_height, step_time
+                        )
 
-                    yaw_rad  = math.radians(gait.body.yaw)
-                    body_vx  = -_dead(axes[AX_LSY]) * speed_cm
-                    body_vy  = -_dead(axes[AX_LSX]) * speed_cm
-                    omega    = -_dead(axes[AX_RSX]) * speed_deg
+                    yaw_rad = math.radians(gait.body.yaw)
+                    body_vx = -_dead(axes[AX_LSY]) * speed_cm
+                    body_vy = -_dead(axes[AX_LSX]) * speed_cm
+                    omega = -_dead(axes[AX_RSX]) * speed_deg
                     vx = body_vx * math.cos(yaw_rad) - body_vy * math.sin(yaw_rad)
                     vy = body_vx * math.sin(yaw_rad) + body_vy * math.cos(yaw_rad)
 
@@ -301,11 +355,13 @@ class ControlThread(threading.Thread):
                     lb = 1.0 if buttons[BTN_LB] > 0.5 else 0.0
                     rb = 1.0 if buttons[BTN_RB] > 0.5 else 0.0
                     if lb or rb:
-                        new_reach = self._shared.get_reach() + (rb - lb) * REACH_RATE_CMS * DT
+                        new_reach = (
+                            self._shared.get_reach() + (rb - lb) * REACH_RATE_CMS * DT
+                        )
                         self._shared.set_reach(new_reach)
                     gait.neutral_reach = self._shared.get_reach()
-                    gait.step_height   = step_height
-                    gait.step_time     = step_time
+                    gait.step_height = step_height
+                    gait.step_time = step_time
 
                     new_pose, new_feet = gait.step(vx, vy, omega, DT)
                     try:
@@ -320,25 +376,41 @@ class ControlThread(threading.Thread):
                         True, False, self._pose_dict(pose), "Walking", walk_mode=True
                     )
 
-                elif standing and not walk_mode and not free_mode and pose is not None and feet is not None:
-                    yaw_rad   = math.radians(pose.yaw)
-                    body_dx   = -_dead(axes[AX_LSY]) * speed_cm * DT
-                    body_dy   = -_dead(axes[AX_LSX]) * speed_cm * DT
+                elif (
+                    standing
+                    and not walk_mode
+                    and not free_mode
+                    and pose is not None
+                    and feet is not None
+                ):
+                    yaw_rad = math.radians(pose.yaw)
+                    body_dx = -_dead(axes[AX_LSY]) * speed_cm * DT
+                    body_dy = -_dead(axes[AX_LSX]) * speed_cm * DT
                     dx = body_dx * math.cos(yaw_rad) - body_dy * math.sin(yaw_rad)
                     dy = body_dx * math.sin(yaw_rad) + body_dy * math.cos(yaw_rad)
-                    lt     =  _dead(buttons[BTN_LT])
-                    rt     =  _dead(buttons[BTN_RT])
-                    dz     = (rt - lt) * speed_cm * DT
-                    lb     = 1.0 if buttons[BTN_LB] > 0.5 else 0.0
-                    rb     = 1.0 if buttons[BTN_RB] > 0.5 else 0.0
-                    droll  = _dead(axes[AX_RSX]) * speed_deg * DT
+                    lt = _dead(buttons[BTN_LT])
+                    rt = _dead(buttons[BTN_RT])
+                    dz = (rt - lt) * speed_cm * DT
+                    lb = 1.0 if buttons[BTN_LB] > 0.5 else 0.0
+                    rb = 1.0 if buttons[BTN_RB] > 0.5 else 0.0
+                    droll = _dead(axes[AX_RSX]) * speed_deg * DT
                     dpitch = -_dead(axes[AX_RSY]) * speed_deg * DT
-                    dyaw   = (lb - rb) * speed_deg * DT
+                    dyaw = (lb - rb) * speed_deg * DT
 
-                    if abs(dx)+abs(dy)+abs(dz)+abs(droll)+abs(dpitch)+abs(dyaw) > 1e-9:
+                    if (
+                        abs(dx)
+                        + abs(dy)
+                        + abs(dz)
+                        + abs(droll)
+                        + abs(dpitch)
+                        + abs(dyaw)
+                        > 1e-9
+                    ):
                         new_pose = replace(
                             pose,
-                            x=pose.x + dx,  y=pose.y + dy,  z=pose.z + dz,
+                            x=pose.x + dx,
+                            y=pose.y + dy,
+                            z=pose.z + dz,
                             roll=pose.roll + droll,
                             pitch=pose.pitch + dpitch,
                             yaw=pose.yaw + dyaw,
@@ -359,9 +431,16 @@ class ControlThread(threading.Thread):
     # --- helpers ---
 
     @staticmethod
-    def _make_gait(gait_type: str, pose: BodyPose, feet: dict,
-                   step_height: float = 4.0, step_time: float = 0.40):
-        kw = dict(neutral_reach=_NEUTRAL_REACH, step_height=step_height, step_time=step_time)
+    def _make_gait(
+        gait_type: str,
+        pose: BodyPose,
+        feet: dict,
+        step_height: float = 4.0,
+        step_time: float = 0.40,
+    ):
+        kw = dict(
+            neutral_reach=_NEUTRAL_REACH, step_height=step_height, step_time=step_time
+        )
         if gait_type == "ripple":
             return RippleGait(pose, feet, **kw)
         if gait_type == "wave":
@@ -377,8 +456,8 @@ class ControlThread(threading.Thread):
 
     @staticmethod
     def _compute_ticks(
-        pose:   BodyPose,
-        feet:   dict[Leg, tuple[float, float, float]],
+        pose: BodyPose,
+        feet: dict[Leg, tuple[float, float, float]],
         limits: Optional[SoftLimits],
     ) -> dict[Leg, dict[Joint, int]]:
         angles = body_pose_ik(pose, feet)
@@ -390,7 +469,7 @@ class ControlThread(threading.Thread):
                 except SoftLimitError as e:
                     raise SoftLimitError(f"{leg.name}: {e}") from e
             ticks[leg] = {
-                Joint.COXA:  angle_to_tick("coxa",  tc),
+                Joint.COXA: angle_to_tick("coxa", tc),
                 Joint.FEMUR: angle_to_tick("femur", tf),
                 Joint.TIBIA: angle_to_tick("tibia", tt),
             }
@@ -407,7 +486,7 @@ class ControlThread(threading.Thread):
 
     def _do_stand(
         self,
-        bus:    ST3020Bus,
+        bus: ST3020Bus,
         limits: Optional[SoftLimits],
     ) -> tuple[BodyPose, dict[Leg, tuple[float, float, float]]]:
         pose = BodyPose(z=STAND_HEIGHT)
@@ -424,9 +503,7 @@ class ControlThread(threading.Thread):
     @staticmethod
     def _do_sit(bus: ST3020Bus) -> None:
         targets = [
-            (servo_id(leg, joint), 2048, STAND_SPEED)
-            for leg in Leg
-            for joint in Joint
+            (servo_id(leg, joint), 2048, STAND_SPEED) for leg in Leg for joint in Joint
         ]
         MotionPlayer(bus, acc=0).move(targets)
         for leg in Leg:
@@ -439,23 +516,30 @@ class ControlThread(threading.Thread):
             for joint in Joint:
                 bus.torque_enable(servo_id(leg, joint), True)
 
-        femur_up   = limits.femur.max_deg if limits else STORAGE_FEMUR_DEG
+        femur_up = limits.femur.max_deg if limits else STORAGE_FEMUR_DEG
         tibia_down = limits.tibia.min_deg if limits else STORAGE_TIBIA_DEG
 
         player = MotionPlayer(bus, acc=0)
-        player.move([
-            (servo_id(leg, joint), 2048, STAND_SPEED)
-            for leg in Leg
-            for joint in Joint
-        ])
+        player.move(
+            [
+                (servo_id(leg, joint), 2048, STAND_SPEED)
+                for leg in Leg
+                for joint in Joint
+            ]
+        )
 
         femur_tick = angle_to_tick("femur", femur_up)
         tibia_tick = angle_to_tick("tibia", tibia_down)
-        player.move([
-            (servo_id(leg, joint), tick, STAND_SPEED)
-            for leg in Leg
-            for joint, tick in ((Joint.FEMUR, femur_tick), (Joint.TIBIA, tibia_tick))
-        ])
+        player.move(
+            [
+                (servo_id(leg, joint), tick, STAND_SPEED)
+                for leg in Leg
+                for joint, tick in (
+                    (Joint.FEMUR, femur_tick),
+                    (Joint.TIBIA, tibia_tick),
+                )
+            ]
+        )
 
         for leg in Leg:
             for joint in Joint:
@@ -466,10 +550,10 @@ class ControlThread(threading.Thread):
         if pose is None:
             return {}
         return {
-            "x":     round(pose.x,     2),
-            "y":     round(pose.y,     2),
-            "z":     round(pose.z,     2),
-            "roll":  round(pose.roll,  2),
+            "x": round(pose.x, 2),
+            "y": round(pose.y, 2),
+            "z": round(pose.z, 2),
+            "roll": round(pose.roll, 2),
             "pitch": round(pose.pitch, 2),
-            "yaw":   round(pose.yaw,   2),
+            "yaw": round(pose.yaw, 2),
         }

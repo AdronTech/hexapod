@@ -52,13 +52,15 @@ def parse_status_packet(raw: bytes) -> StatusPacket:
         raise ProtocolError(f"Packet too short: {len(raw)} bytes")
 
     servo_id = raw[2]
-    length = raw[3]   # = len(data) + 2  (ERROR byte + CHECKSUM byte)
+    length = raw[3]  # = len(data) + 2  (ERROR byte + CHECKSUM byte)
     error = raw[4]
 
     if len(raw) < length + 4:
-        raise ProtocolError(f"Incomplete packet: need {length + 4} bytes, have {len(raw)}")
+        raise ProtocolError(
+            f"Incomplete packet: need {length + 4} bytes, have {len(raw)}"
+        )
 
-    data = bytes(raw[5 : 3 + length])      # length - 2 payload bytes
+    data = bytes(raw[5 : 3 + length])  # length - 2 payload bytes
     checksum_received = raw[3 + length]
 
     checksum_calc = ~(servo_id + length + error + sum(data)) & 0xFF

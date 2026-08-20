@@ -9,6 +9,7 @@ COXA, FEMUR, TIBIA = 6.4, 11.0, 15.0
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def assert_close(a, b, tol=1e-6, msg=""):
     assert abs(a - b) < tol, f"{msg}: {a} != {b} (tol={tol})"
 
@@ -25,20 +26,21 @@ def fk_ik_roundtrip(x, y, z, tol=1e-6):
 # FK: known positions
 # ---------------------------------------------------------------------------
 
+
 class TestFK:
     def test_neutral_all_zero(self):
         """All joints at 0° → documented neutral foot position."""
         x, y, z = leg_fk(0, 0, 0)
         assert_close(x, COXA + FEMUR, msg="x at neutral")  # 17.4
-        assert_close(y, 0,             msg="y at neutral")
-        assert_close(z, -TIBIA,        msg="z at neutral")  # -15.0
+        assert_close(y, 0, msg="y at neutral")
+        assert_close(z, -TIBIA, msg="z at neutral")  # -15.0
 
     def test_coxa_90(self):
         """Coxa +90° rotates foot to the Y direction."""
         x, y, z = leg_fk(90, 0, 0)
-        assert_close(x, 0,             tol=1e-5, msg="x")
-        assert_close(y, COXA + FEMUR,  tol=1e-5, msg="y")
-        assert_close(z, -TIBIA,        msg="z")
+        assert_close(x, 0, tol=1e-5, msg="x")
+        assert_close(y, COXA + FEMUR, tol=1e-5, msg="y")
+        assert_close(z, -TIBIA, msg="z")
 
     def test_femur_90_up(self):
         """Femur +90° → femur straight up; tibia joint-neutral is 90° from femur = pointing outward."""
@@ -46,8 +48,8 @@ class TestFK:
         # tibia pivot: (coxa, 0, femur); neutral tibia is 90° CW from femur = pointing +r
         # foot: (coxa + tibia, 0, femur)
         assert_close(x, COXA + TIBIA, tol=1e-5, msg="x")
-        assert_close(y, 0,            msg="y")
-        assert_close(z, FEMUR,        tol=1e-5, msg="z")
+        assert_close(y, 0, msg="y")
+        assert_close(z, FEMUR, tol=1e-5, msg="z")
 
     def test_non_neutral_femur_roundtrip(self):
         """FK→IK→FK with a non-zero femur angle exercises the joint-angle tibia formulation."""
@@ -66,6 +68,7 @@ class TestFK:
 # ---------------------------------------------------------------------------
 # IK: round-trip FK→IK→FK
 # ---------------------------------------------------------------------------
+
 
 class TestIK:
     def test_neutral_position(self):
@@ -92,9 +95,9 @@ class TestIK:
 
     def test_roundtrip_various(self):
         targets = [
-            (14, 0,  -10),
-            (14, 0,  -18),
-            (10, 8,  -14),
+            (14, 0, -10),
+            (14, 0, -18),
+            (10, 8, -14),
             (12, -4, -16),
         ]
         for pos in targets:
@@ -114,6 +117,7 @@ class TestIK:
 # ---------------------------------------------------------------------------
 # Tick ↔ angle
 # ---------------------------------------------------------------------------
+
 
 class TestTickAngle:
     def test_neutral_tick_is_zero_degrees(self):

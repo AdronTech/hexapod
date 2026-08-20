@@ -14,7 +14,7 @@ Neutral foot position (all joints at 0°): (17.4, 0, −15)
 
 import math
 
-COXA_LEN  = 6.4   # cm
+COXA_LEN = 6.4  # cm
 FEMUR_LEN = 11.0  # cm
 TIBIA_LEN = 15.0  # cm
 
@@ -28,6 +28,7 @@ class IKError(ValueError):
 # ---------------------------------------------------------------------------
 # Forward kinematics
 # ---------------------------------------------------------------------------
+
 
 def leg_fk(
     theta_coxa: float,
@@ -57,6 +58,7 @@ def leg_fk(
 # Inverse kinematics
 # ---------------------------------------------------------------------------
 
+
 def leg_ik(
     x: float,
     y: float,
@@ -76,8 +78,8 @@ def leg_ik(
     theta_coxa = math.degrees(math.atan2(y, x))
 
     # --- Project into the vertical plane after coxa rotation ---
-    r_total = math.hypot(x, y)          # distance from coxa axis to foot
-    r = r_total - coxa                  # distance from femur pivot to foot (horizontal)
+    r_total = math.hypot(x, y)  # distance from coxa axis to foot
+    r = r_total - coxa  # distance from femur pivot to foot (horizontal)
 
     # Distance from femur pivot to foot
     d = math.hypot(r, z)
@@ -85,7 +87,7 @@ def leg_ik(
     if d > femur + tibia:
         raise IKError(
             f"Target ({x:.1f}, {y:.1f}, {z:.1f}) is out of reach: "
-            f"d={d:.2f} > femur+tibia={femur+tibia:.2f}"
+            f"d={d:.2f} > femur+tibia={femur + tibia:.2f}"
         )
     if d < abs(femur - tibia):
         raise IKError(
@@ -107,9 +109,9 @@ def leg_ik(
     # Tibia is a joint angle relative to the femur. Compute the absolute direction
     # of the tibia from horizontal, then subtract the femur-relative neutral (tf - 90°).
     tf_rad = math.radians(theta_femur)
-    dr = r - femur * math.cos(tf_rad)   # r = r_total - coxa (from femur pivot)
+    dr = r - femur * math.cos(tf_rad)  # r = r_total - coxa (from femur pivot)
     dz = z - femur * math.sin(tf_rad)
-    tibia_abs_angle = math.degrees(math.atan2(dz, dr))   # from +r horizontal
+    tibia_abs_angle = math.degrees(math.atan2(dz, dr))  # from +r horizontal
     theta_tibia = tibia_abs_angle - theta_femur + 90.0
 
     return theta_coxa, theta_femur, theta_tibia
@@ -118,6 +120,7 @@ def leg_ik(
 # ---------------------------------------------------------------------------
 # Tick ↔ angle conversion (per-joint sign convention from docs/kinematics.md)
 # ---------------------------------------------------------------------------
+
 
 def angle_to_tick(joint: str, degrees: float) -> int:
     """

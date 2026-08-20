@@ -72,7 +72,9 @@ def read_key() -> str | None:
         return None
     if data[0:1] == b"\x1b" and len(data) >= 3 and data[1:2] == b"[":
         code = chr(data[2])
-        return {"A": "UP", "B": "DOWN", "C": "RIGHT", "D": "LEFT"}.get(code, f"ESC[{code}")
+        return {"A": "UP", "B": "DOWN", "C": "RIGHT", "D": "LEFT"}.get(
+            code, f"ESC[{code}"
+        )
     if data[0:1] == b"\x1b":
         return "ESC"
     return data[0:1].decode("utf-8", errors="replace")
@@ -85,13 +87,17 @@ def safe_read_pos(bus: ST3020Bus, sid: int) -> int | None:
         return None
 
 
-def calibrate_servo(bus: ST3020Bus, leg: Leg, joint: Joint, index: int, total: int) -> str:
+def calibrate_servo(
+    bus: ST3020Bus, leg: Leg, joint: Joint, index: int, total: int
+) -> str:
     """Calibrate one servo. Returns 'done', 'skip', 'back', or 'quit'."""
     sid = servo_id(leg, joint)
 
-    print(f"\n{'='*58}")
-    print(f"  [{index+1}/{total}]  Leg {leg.value} {leg.name}  /  {joint.name}  (ID {sid})")
-    print(f"{'='*58}")
+    print(f"\n{'=' * 58}")
+    print(
+        f"  [{index + 1}/{total}]  Leg {leg.value} {leg.name}  /  {joint.name}  (ID {sid})"
+    )
+    print(f"{'=' * 58}")
 
     # ── Phase 1: free position ──────────────────────────────────
     bus.torque_enable(sid, False)
@@ -141,9 +147,7 @@ def calibrate_servo(bus: ST3020Bus, leg: Leg, joint: Joint, index: int, total: i
         while True:
             pos = safe_read_pos(bus, sid)
             pos_label = f"{pos:4d}" if pos is not None else " ERR"
-            sys.stdout.write(
-                f"\r  goal={goal:4d}  pos={pos_label}   "
-            )
+            sys.stdout.write(f"\r  goal={goal:4d}  pos={pos_label}   ")
             sys.stdout.flush()
 
             key = read_key()
@@ -217,7 +221,7 @@ def main() -> None:
 
             time.sleep(0.1)
 
-    print(f"\n{'='*58}")
+    print(f"\n{'=' * 58}")
     print(f"Done.  Written: {written}  Skipped: {skipped}")
 
 

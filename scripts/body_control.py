@@ -51,8 +51,8 @@ from hexapod.body_ik import (
 )
 
 DEFAULT_PORT = "/dev/ttyACM0"
-DEFAULT_STAND_HEIGHT = 15.0   # cm
-DEFAULT_SPEED = 300            # ticks/s for stand/sit
+DEFAULT_STAND_HEIGHT = 15.0  # cm
+DEFAULT_SPEED = 300  # ticks/s for stand/sit
 DEFAULT_STEP_CM = 0.5
 DEFAULT_STEP_DEG = 1.0
 DEFAULT_ACC = 0
@@ -61,14 +61,20 @@ JOINT_NAMES = {Joint.COXA: "coxa", Joint.FEMUR: "femur", Joint.TIBIA: "tibia"}
 
 # Jog deltas: (dx, dy, dz) for translate mode, (droll, dpitch, dyaw) for rotate mode
 _JOG_TRANSLATE: dict[str, tuple[float, float, float]] = {
-    "w": (+1, 0, 0), "s": (-1, 0, 0),
-    "a": (0, +1, 0), "d": (0, -1, 0),
-    "e": (0, 0, +1), "q": (0, 0, -1),
+    "w": (+1, 0, 0),
+    "s": (-1, 0, 0),
+    "a": (0, +1, 0),
+    "d": (0, -1, 0),
+    "e": (0, 0, +1),
+    "q": (0, 0, -1),
 }
 _JOG_ROTATE: dict[str, tuple[float, float, float]] = {
-    "w": (0, +1, 0), "s": (0, -1, 0),   # pitch: nose up / down
-    "a": (0, 0, +1), "d": (0, 0, -1),   # yaw:   left / right
-    "e": (+1, 0, 0), "q": (-1, 0, 0),   # roll:  left side up / down
+    "w": (0, +1, 0),
+    "s": (0, -1, 0),  # pitch: nose up / down
+    "a": (0, 0, +1),
+    "d": (0, 0, -1),  # yaw:   left / right
+    "e": (+1, 0, 0),
+    "q": (-1, 0, 0),  # roll:  left side up / down
 }
 
 
@@ -76,11 +82,11 @@ _JOG_ROTATE: dict[str, tuple[float, float, float]] = {
 # IK helpers
 # ---------------------------------------------------------------------------
 
+
 def neutral_world_feet() -> dict[Leg, tuple[float, float, float]]:
     """Neutral foot positions planted on the ground (world z = 0)."""
     return {
-        leg: (neutral_foot_body(leg)[0], neutral_foot_body(leg)[1], 0.0)
-        for leg in Leg
+        leg: (neutral_foot_body(leg)[0], neutral_foot_body(leg)[1], 0.0) for leg in Leg
     }
 
 
@@ -99,7 +105,7 @@ def compute_all_ticks(
         if limits:
             limits.check(tc, tf, tt)
         ticks[leg] = {
-            Joint.COXA:  angle_to_tick("coxa",  tc),
+            Joint.COXA: angle_to_tick("coxa", tc),
             Joint.FEMUR: angle_to_tick("femur", tf),
             Joint.TIBIA: angle_to_tick("tibia", tt),
         }
@@ -108,7 +114,9 @@ def compute_all_ticks(
 
 def apply_all_ticks(bus: ST3020Bus, ticks: dict[Leg, dict[Joint, int]]) -> None:
     cmds = [
-        PositionCommand(servo_id(leg, joint), ticks[leg][joint], speed=0, acc=DEFAULT_ACC)
+        PositionCommand(
+            servo_id(leg, joint), ticks[leg][joint], speed=0, acc=DEFAULT_ACC
+        )
         for leg in Leg
         for joint in Joint
     ]
@@ -119,6 +127,7 @@ def apply_all_ticks(bus: ST3020Bus, ticks: dict[Leg, dict[Joint, int]]) -> None:
 # Status display
 # ---------------------------------------------------------------------------
 
+
 def print_pose(
     pose: BodyPose,
     feet: dict[Leg, tuple[float, float, float]] | None,
@@ -127,7 +136,9 @@ def print_pose(
     print()
     print(f"  Body pose:")
     print(f"    x={pose.x:+6.2f} cm   y={pose.y:+6.2f} cm   z={pose.z:+6.2f} cm")
-    print(f"    roll={pose.roll:+6.2f}°   pitch={pose.pitch:+6.2f}°   yaw={pose.yaw:+6.2f}°")
+    print(
+        f"    roll={pose.roll:+6.2f}°   pitch={pose.pitch:+6.2f}°   yaw={pose.yaw:+6.2f}°"
+    )
 
     if feet is None:
         print("  (no feet planted — run 'stand' first)")
@@ -153,6 +164,7 @@ def print_pose(
 # ---------------------------------------------------------------------------
 # Stand / sit
 # ---------------------------------------------------------------------------
+
 
 def do_stand(
     bus: ST3020Bus,
@@ -206,6 +218,7 @@ def do_sit(bus: ST3020Bus, speed: int) -> None:
 # ---------------------------------------------------------------------------
 # Jog mode
 # ---------------------------------------------------------------------------
+
 
 def jog_mode(
     bus: ST3020Bus,
@@ -261,9 +274,9 @@ def jog_mode(
                 droll, dpitch, dyaw = delta
                 new_pose = replace(
                     pose,
-                    roll=pose.roll   + droll  * step_deg,
+                    roll=pose.roll + droll * step_deg,
                     pitch=pose.pitch + dpitch * step_deg,
-                    yaw=pose.yaw     + dyaw   * step_deg,
+                    yaw=pose.yaw + dyaw * step_deg,
                 )
             else:
                 dx, dy, dz = delta
@@ -294,6 +307,7 @@ def jog_mode(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Interactive body IK controller")

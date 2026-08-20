@@ -65,8 +65,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
 DEFAULT_SERIAL_PORT = "/dev/ttyACM0"
-DEFAULT_HTTP_HOST   = "0.0.0.0"
-DEFAULT_HTTP_PORT   = 8080
+DEFAULT_HTTP_HOST = "0.0.0.0"
+DEFAULT_HTTP_PORT = 8080
 
 CONFIG_PATH = Path(__file__).parent / "hexapod_config.json"
 
@@ -555,6 +555,7 @@ requestAnimationFrame(loop);
 # FastAPI app
 # ---------------------------------------------------------------------------
 
+
 def build_app(shared: SharedState) -> FastAPI:
 
     @asynccontextmanager
@@ -588,7 +589,7 @@ def build_app(shared: SharedState) -> FastAPI:
                     if data.get("type") == "speed":
                         sc, sd = shared.get_speeds()
                         shared.set_speeds(
-                            data.get("speed_cm",  sc),
+                            data.get("speed_cm", sc),
                             data.get("speed_deg", sd),
                         )
                     elif data.get("type") == "reach":
@@ -600,7 +601,9 @@ def build_app(shared: SharedState) -> FastAPI:
                     elif data.get("type") == "step_time":
                         shared.set_step_time(data.get("value", 0.40))
                     elif data.get("type") == "step_threshold":
-                        shared.set_step_threshold(data.get("value", FREE_STEP_THRESHOLD))
+                        shared.set_step_threshold(
+                            data.get("value", FREE_STEP_THRESHOLD)
+                        )
                     elif data.get("type") == "command":
                         cmd = data.get("cmd", "")
                         if cmd == "save_config":
@@ -630,11 +633,14 @@ def build_app(shared: SharedState) -> FastAPI:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Hexapod web controller")
-    parser.add_argument("--port",      default=DEFAULT_SERIAL_PORT, help="Serial port")
-    parser.add_argument("--bind",      default=DEFAULT_HTTP_HOST,   help="HTTP bind address")
-    parser.add_argument("--http-port", default=DEFAULT_HTTP_PORT, type=int, help="HTTP port")
+    parser.add_argument("--port", default=DEFAULT_SERIAL_PORT, help="Serial port")
+    parser.add_argument("--bind", default=DEFAULT_HTTP_HOST, help="HTTP bind address")
+    parser.add_argument(
+        "--http-port", default=DEFAULT_HTTP_PORT, type=int, help="HTTP port"
+    )
     args = parser.parse_args()
 
     shared = SharedState()

@@ -37,7 +37,7 @@ class SoftLimits:
         """Raise SoftLimitError if any angle violates its limit."""
         violations = []
         for name, lim, val in (
-            ("coxa",  self.coxa,  coxa_deg),
+            ("coxa", self.coxa, coxa_deg),
             ("femur", self.femur, femur_deg),
             ("tibia", self.tibia, tibia_deg),
         ):
@@ -50,7 +50,7 @@ class SoftLimits:
 
     def save(self, path: Path = DEFAULT_PATH) -> None:
         data = {
-            "coxa":  {"min_deg": self.coxa.min_deg,  "max_deg": self.coxa.max_deg},
+            "coxa": {"min_deg": self.coxa.min_deg, "max_deg": self.coxa.max_deg},
             "femur": {"min_deg": self.femur.min_deg, "max_deg": self.femur.max_deg},
             "tibia": {"min_deg": self.tibia.min_deg, "max_deg": self.tibia.max_deg},
         }

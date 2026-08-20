@@ -29,15 +29,15 @@ class MotionPlayer:
             if servo_id not in self._current:
                 self._current[servo_id] = float(self._bus.read_position(servo_id))
 
-        goal  = {sid: float(pos) for sid, pos, _   in targets}
-        speed = {sid: float(spd) for sid, _,   spd in targets}
+        goal = {sid: float(pos) for sid, pos, _ in targets}
+        speed = {sid: float(spd) for sid, _, spd in targets}
 
         t_next = time.monotonic()
         while True:
             commands = []
             all_done = True
             for sid, target in goal.items():
-                cur  = self._current[sid]
+                cur = self._current[sid]
                 step = speed[sid] * self._interval
                 remaining = target - cur
                 if abs(remaining) <= step:
@@ -46,7 +46,9 @@ class MotionPlayer:
                     nxt = cur + step if remaining > 0 else cur - step
                     all_done = False
                 self._current[sid] = nxt
-                commands.append(PositionCommand(sid, round(nxt), speed=0, acc=self._acc))
+                commands.append(
+                    PositionCommand(sid, round(nxt), speed=0, acc=self._acc)
+                )
 
             self._bus.sync_write_position(commands)
 

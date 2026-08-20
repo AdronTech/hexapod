@@ -1,0 +1,1860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hexapod — Interactive Concepts Guide</title>
+<style>
+:root {
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#232636;--border:#2e3248;
+  --accent:#5b8dee;--accent2:#7c5cbf;--green:#4ecb71;--orange:#f5a623;
+  --red:#e05252;--text:#d4d8f0;--muted:#6b7094;--code:#a8d8a8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:15px;display:flex;min-height:100vh}
+
+nav{width:220px;min-width:220px;background:var(--surface);border-right:1px solid var(--border);padding:24px 0;position:sticky;top:0;height:100vh;overflow-y:auto}
+nav h2{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);padding:0 20px 8px}
+nav a{display:block;padding:8px 20px;color:var(--muted);text-decoration:none;font-size:13px;border-left:3px solid transparent;transition:all .15s}
+nav a:hover{color:var(--text);background:var(--surface2)}
+nav a.active{color:var(--accent);border-left-color:var(--accent);background:var(--surface2)}
+nav .sec-lbl{padding:16px 20px 4px;font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:#3d4260}
+
+main{flex:1;overflow-y:auto}
+.section{padding:48px 56px;max-width:900px;border-bottom:1px solid var(--border)}
+.section:last-child{border-bottom:none}
+h1{font-size:28px;font-weight:700;color:#fff;margin-bottom:8px}
+h2{font-size:20px;font-weight:600;color:#e0e4ff;margin:32px 0 12px}
+h3{font-size:15px;font-weight:600;color:var(--accent);margin:20px 0 8px}
+p{line-height:1.7;color:var(--text);margin-bottom:12px}
+.subtitle{color:var(--muted);font-size:14px;margin-bottom:28px}
+code{font-family:'Cascadia Code','Fira Code',monospace;font-size:13px;background:var(--surface2);padding:2px 6px;border-radius:4px;color:var(--code)}
+pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px 20px;overflow-x:auto;margin:16px 0}
+pre code{background:none;padding:0}
+
+.card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:20px 24px;margin:16px 0}
+.card.hi{border-color:var(--accent);background:#1a2040}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:16px 0}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-right:6px}
+.tb{background:#1d3a6e;color:#7ab3ff}.tg{background:#1a3d2a;color:#4ecb71}.to{background:#3d2d10;color:#f5a623}
+
+canvas{display:block;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:crosshair}
+.cv-wrap{position:relative;margin:16px 0}
+.cv-lbl{position:absolute;top:8px;left:12px;font-size:11px;color:var(--muted);pointer-events:none}
+
+.ctrls{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0;align-items:center}
+.cg{display:flex;flex-direction:column;gap:4px}
+.cg label{font-size:11px;color:var(--muted)}
+input[type=range]{width:130px;accent-color:var(--accent)}
+select{background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 10px;border-radius:5px;font-size:13px}
+button{background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:opacity .15s}
+button:hover{opacity:.85}
+button.sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.vd{font-size:13px;color:var(--accent);font-family:monospace;min-width:50px;display:inline-block}
+
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
+th{text-align:left;padding:8px 12px;background:var(--surface2);color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border)}
+td{padding:8px 12px;border-bottom:1px solid #1e2133}
+tr:last-child td{border-bottom:none}
+.mono{font-family:monospace}
+
+.formula{background:#12152a;border:1px solid #2a2f50;border-radius:8px;padding:14px 20px;margin:12px 0;font-family:monospace;font-size:14px;color:#c0c8ff;line-height:1.9}
+
+.steps{counter-reset:step;list-style:none;margin:12px 0}
+.steps li{counter-increment:step;padding:10px 12px 10px 52px;position:relative;border-left:2px solid var(--border);margin-left:20px;margin-bottom:2px}
+.steps li::before{content:counter(step);position:absolute;left:-20px;top:8px;width:32px;height:32px;background:var(--accent2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff}
+
+.note{background:#1a2c1a;border-left:3px solid var(--green);padding:10px 16px;border-radius:0 6px 6px 0;margin:12px 0;font-size:13px}
+.warn{background:#2c1f10;border-left:3px solid var(--orange);padding:10px 16px;border-radius:0 6px 6px 0;margin:12px 0;font-size:13px}
+.result-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:8px 0;font-family:monospace;font-size:13px}
+</style>
+</head>
+<body>
+
+<nav>
+  <h2>Hexapod Guide</h2>
+  <div class="sec-lbl">Hardware</div>
+  <a href="#s-robot">1. The Robot</a>
+  <a href="#s-servos">2. Servos &amp; Protocol</a>
+  <div class="sec-lbl">Math</div>
+  <a href="#s-coords">3. Coordinate Frames</a>
+  <a href="#s-fk">4. Forward Kinematics</a>
+  <a href="#s-ik">5. Inverse Kinematics</a>
+  <a href="#s-bodyik">6. Body IK</a>
+  <div class="sec-lbl">Motion</div>
+  <a href="#s-gait">7. Gaits</a>
+  <a href="#s-bezier">8. Swing Trajectory</a>
+  <a href="#s-freegait">9. Free Gait</a>
+  <div class="sec-lbl">Software</div>
+  <a href="#s-loop">10. Control Loop</a>
+  <a href="#s-pipeline">11. Full Pipeline</a>
+</nav>
+
+<main id="main">
+
+<!-- ═══ 1 ═══ -->
+<div class="section" id="s-robot">
+  <h1>1. The Robot</h1>
+  <p class="subtitle">Physical layout, leg naming, and body geometry</p>
+  <p>A hexapod is a six-legged robot. Each leg has <strong>three joints</strong> — 18 servo motors total. Understanding the naming is the foundation for everything.</p>
+
+  <h2>Body Geometry</h2>
+  <p>The body is a <strong>regular hexagon</strong>. The legs mount at the six corners. <strong>Hover over a leg</strong> to highlight it.</p>
+
+  <div class="cv-wrap">
+    <canvas id="c-body" width="520" height="310"></canvas>
+    <span class="cv-lbl">Top-down view — hover to inspect legs</span>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Leg Index</h3>
+      <table>
+        <tr><th>ID</th><th>Name</th><th>Corner angle</th></tr>
+        <tr><td>1</td><td>Front-Right</td><td>−30°</td></tr>
+        <tr><td>2</td><td>Mid-Right</td><td>−90°</td></tr>
+        <tr><td>3</td><td>Rear-Right</td><td>−150°</td></tr>
+        <tr><td>4</td><td>Rear-Left</td><td>+150°</td></tr>
+        <tr><td>5</td><td>Mid-Left</td><td>+90°</td></tr>
+        <tr><td>6</td><td>Front-Left</td><td>+30°</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Link Lengths</h3>
+      <table>
+        <tr><th>Segment</th><th>Length</th></tr>
+        <tr><td>Body radius</td><td class="mono">8.85 cm</td></tr>
+        <tr><td>Coxa</td><td class="mono">6.4 cm</td></tr>
+        <tr><td>Femur</td><td class="mono">11.0 cm</td></tr>
+        <tr><td>Tibia</td><td class="mono">15.0 cm</td></tr>
+        <tr><td>Neutral reach</td><td class="mono">17.4 cm from pivot</td></tr>
+        <tr><td>Max reach</td><td class="mono">32.4 cm</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>Three Joints per Leg</h2>
+  <p><strong>Click a joint name</strong> below to highlight it on the diagram.</p>
+  <div class="grid3">
+    <div class="card" onclick="legHighlight=0;drawLegStatic()" style="cursor:pointer">
+      <h3 style="color:#5b8dee">Coxa (joint 1)</h3>
+      <p>The "hip". Rotates the leg horizontally (yaw). ID = leg×10+1</p>
+    </div>
+    <div class="card" onclick="legHighlight=1;drawLegStatic()" style="cursor:pointer">
+      <h3 style="color:#7c5cbf">Femur (joint 2)</h3>
+      <p>The "thigh". Rotates up/down (pitch). Controls height. ID = leg×10+2</p>
+    </div>
+    <div class="card" onclick="legHighlight=2;drawLegStatic()" style="cursor:pointer">
+      <h3 style="color:#e05252">Tibia (joint 3)</h3>
+      <p>The "shin". Controls reach. ID = leg×10+3</p>
+    </div>
+  </div>
+  <div class="cv-wrap"><canvas id="c-leg" width="520" height="240"></canvas></div>
+
+  <h2>Servo ID Scheme</h2>
+  <div class="formula">servo_id = leg_index × 10 + joint_index
+
+  Leg 1 Coxa  → 11 &nbsp; Leg 2 Femur → 22 &nbsp; Leg 5 Tibia → 53</div>
+</div>
+
+<!-- ═══ 2 ═══ -->
+<div class="section" id="s-servos">
+  <h1>2. Servos &amp; Protocol</h1>
+  <p class="subtitle">ST3020 servos, tick encoding, and the SCS bus protocol</p>
+
+  <h2>What Is a Tick?</h2>
+  <p>Each servo reports its angle as an integer 0–4095 called a <em>tick</em>. The encoder has 4096 positions per full revolution. <strong>Tick 2048 = 0°</strong> (neutral). Drag the slider.</p>
+
+  <div class="cv-wrap"><canvas id="c-tick" width="520" height="160"></canvas></div>
+  <div class="ctrls">
+    <div class="cg"><label>Tick value</label>
+      <input type="range" id="tick-sl" min="0" max="4095" value="2048" oninput="updateTick()"></div>
+    <div>Tick: <span class="vd" id="tick-val">2048</span></div>
+    <div>Degrees: <span class="vd" id="deg-val">0.0°</span></div>
+    <div>Radians: <span class="vd" id="rad-val">0.000</span></div>
+  </div>
+
+  <div class="formula">degrees = (tick − 2048) × 0.08789°
+tick    = 2048 + round(degrees / 0.08789)</div>
+
+  <h2>Sign Conventions per Joint</h2>
+  <p>Each joint has a different sign so the IK angles stay physically intuitive (positive = naturally upward/outward direction).</p>
+  <table>
+    <tr><th>Joint</th><th>Positive angle means</th><th>Tick formula</th></tr>
+    <tr><td>Coxa</td><td>CCW from above (forward sweep for right-side legs)</td><td>tick = 2048 − round(θ/0.08789)</td></tr>
+    <tr><td>Femur</td><td>Tip rises above horizontal</td><td>tick = 2048 − round(θ/0.08789)</td></tr>
+    <tr><td>Tibia</td><td>Tip swings outward/down</td><td>tick = 2048 + round(θ/0.08789)</td></tr>
+  </table>
+  <div class="warn">The tibia sign is <strong>opposite</strong> to coxa and femur. Always use <code>angle_to_tick(joint, degrees)</code>.</div>
+
+  <h2>The SCS Bus Protocol</h2>
+  <p>All 18 servos share one serial wire (half-duplex). You address each by ID. The critical operation is <em>sync write</em>: one broadcast packet that moves all 18 simultaneously.</p>
+  <div class="card hi">
+    <h3>Packet Format</h3>
+    <div class="formula" style="margin:0">TX: <span style="color:#5b8dee">FF FF</span> <span style="color:#f5a623">ID</span> <span style="color:#4ecb71">LEN</span> <span style="color:#e05252">INSTR</span> [PARAMS...] <span style="color:#7c5cbf">CHECKSUM</span>
+RX: <span style="color:#5b8dee">FF FF</span> <span style="color:#f5a623">ID</span> <span style="color:#4ecb71">LEN</span> <span style="color:#e05252">ERROR</span> [DATA...]  <span style="color:#7c5cbf">CHECKSUM</span>
+
+CHECKSUM = ~(ID + LEN + INSTR + sum(PARAMS)) &amp; 0xFF
+LEN = len(PARAMS) + 2</div>
+  </div>
+</div>
+
+<!-- ═══ 3 ═══ -->
+<div class="section" id="s-coords">
+  <h1>3. Coordinate Frames</h1>
+  <p class="subtitle">How positions are expressed in different reference frames</p>
+  <div class="grid3">
+    <div class="card hi"><h3>World Frame</h3><p>Fixed to the ground. Feet on ground → z=0. Used for gait planning.</p></div>
+    <div class="card"><h3>Body Frame</h3><p>Fixed to the chassis. Origin at body center. X=forward, Y=left, Z=up.</p></div>
+    <div class="card"><h3>Leg Frame</h3><p>Origin at each coxa pivot. X=radially outward. One per leg. Used for single-leg IK.</p></div>
+  </div>
+
+  <p><strong>Drag the sliders</strong> to move and rotate the body relative to the world frame.</p>
+  <div class="cv-wrap">
+    <canvas id="c-frames" width="520" height="320"></canvas>
+    <span class="cv-lbl">Top-down view — world/body/leg frames</span>
+  </div>
+  <div class="ctrls">
+    <div class="cg"><label>Body yaw (°) <span class="vd" id="fr-yaw-v">0</span></label>
+      <input type="range" id="fr-yaw" min="-60" max="60" value="0" oninput="drawFrames()"></div>
+    <div class="cg"><label>Body X (cm) <span class="vd" id="fr-x-v">0</span></label>
+      <input type="range" id="fr-x" min="-12" max="12" value="0" oninput="drawFrames()"></div>
+    <div class="cg"><label>Body Y (cm) <span class="vd" id="fr-y-v">0</span></label>
+      <input type="range" id="fr-y" min="-12" max="12" value="0" oninput="drawFrames()"></div>
+  </div>
+
+  <h2>Body → Leg Transform</h2>
+  <div class="formula">To get foot position in leg frame from body frame:
+1. Subtract corner position: foot_rel = foot_body − corner_pos(leg)
+2. Rotate by −corner_angle:
+   leg_x = foot_rel.x·cos(α) + foot_rel.y·sin(α)
+   leg_y = −foot_rel.x·sin(α) + foot_rel.y·cos(α)
+   leg_z = foot_rel.z
+   where α = corner angle (e.g. −30° for FR leg)</div>
+</div>
+
+<!-- ═══ 4 ═══ -->
+<div class="section" id="s-fk">
+  <h1>4. Forward Kinematics</h1>
+  <p class="subtitle">Given joint angles → where is the foot?</p>
+  <p>FK applies rotation matrices in sequence: coxa yaws the arm horizontally, then femur+tibia rotate in that vertical plane. <strong>Drag any slider.</strong></p>
+
+  <div class="cv-wrap">
+    <canvas id="c-fk" width="520" height="300"></canvas>
+    <span class="cv-lbl">Side view (r-z plane) + top view inset</span>
+  </div>
+  <div class="ctrls">
+    <div class="cg"><label>Coxa θ (°) <span class="vd" id="fk-cv">0°</span></label>
+      <input type="range" id="fk-c" min="-85" max="85" value="0" oninput="updateFK()"></div>
+    <div class="cg"><label>Femur θ (°) <span class="vd" id="fk-fv">0°</span></label>
+      <input type="range" id="fk-f" min="-85" max="140" value="0" oninput="updateFK()"></div>
+    <div class="cg"><label>Tibia θ (°) <span class="vd" id="fk-tv">0°</span></label>
+      <input type="range" id="fk-t" min="-70" max="75" value="0" oninput="updateFK()"></div>
+    <button class="sec" onclick="document.getElementById('fk-c').value=0;document.getElementById('fk-f').value=0;document.getElementById('fk-t').value=0;updateFK()">Reset neutral</button>
+  </div>
+  <div class="result-box" id="fk-res" style="color:var(--accent)">Foot: (17.40, 0.00, −15.00) cm in leg frame | Ticks: 11→2048 12→2048 13→2048</div>
+
+  <div class="formula">r = COXA + FEMUR·cos(θf) + TIBIA·cos(θf+θt)
+x = r·cos(θc), y = r·sin(θc)
+z = −FEMUR·sin(θf) − TIBIA·sin(θf+θt)
+
+Neutral (all 0°): x=17.4, y=0, z=−15 cm</div>
+</div>
+
+<!-- ═══ 5 ═══ -->
+<div class="section" id="s-ik">
+  <h1>5. Inverse Kinematics</h1>
+  <p class="subtitle">Given foot position → what joint angles?</p>
+  <p>IK solves analytically (no iteration). <strong>Click or drag</strong> on the canvas to move the foot target. Blue = reachable, red = out of range.</p>
+
+  <div class="cv-wrap">
+    <canvas id="c-ik" width="520" height="300"></canvas>
+    <span class="cv-lbl">Click or drag to set foot target</span>
+  </div>
+  <div class="result-box" id="ik-res">
+    <span id="ik-angles" style="color:var(--green)">Angles: coxa 0.0° | femur 0.0° | tibia 0.0°</span><br>
+    <span id="ik-ticks" style="color:var(--accent)">Ticks: 11→2048  12→2048  13→2048</span><br>
+    <span id="ik-err" style="color:var(--red)"></span>
+  </div>
+
+  <ol class="steps">
+    <li><strong>Coxa yaw:</strong> θc = atan2(y, x)</li>
+    <li><strong>Project to vertical plane:</strong> rh = hypot(x,y) − COXA &nbsp;|&nbsp; d = hypot(rh, z)</li>
+    <li><strong>Check reachability:</strong> |FEMUR−TIBIA| ≤ d ≤ FEMUR+TIBIA</li>
+    <li><strong>Elevation angle + law of cosines:</strong> φ = atan2(z, rh) &nbsp;|&nbsp; β = acos((F²+d²−T²)/(2Fd))</li>
+    <li><strong>Femur (elbow-down):</strong> θf = φ + β</li>
+    <li><strong>Tibia relative to femur:</strong> tibia_abs = atan2(z − F·sin θf, rh − F·cos θf) &nbsp;→&nbsp; θt = tibia_abs − θf + 90°</li>
+  </ol>
+
+  <h2>Reachable Workspace</h2>
+  <p>The reachable area in the r-z plane (y=0) is bounded by the two-link constraint. Drag the target above to explore it.</p>
+  <div class="cv-wrap">
+    <canvas id="c-ikws" width="520" height="260"></canvas>
+    <span class="cv-lbl">IK workspace (r-z plane, y=0)</span>
+  </div>
+</div>
+
+<!-- ═══ 6 ═══ -->
+<div class="section" id="s-bodyik">
+  <h1>6. Body IK</h1>
+  <p class="subtitle">Moving the whole body in 6 degrees of freedom</p>
+  <p>Body IK keeps all feet planted on the ground while the body tilts/translates. <strong>Drag sliders</strong> to pose the body and see how each leg adapts.</p>
+
+  <div class="cv-wrap">
+    <canvas id="c-bik" width="520" height="360"></canvas>
+    <span class="cv-lbl">Oblique 3D projection — left=front view, right=top view</span>
+  </div>
+  <div class="ctrls">
+    <div class="cg"><label>Height (cm) <span class="vd" id="bik-z-v">15</span></label>
+      <input type="range" id="bik-z" min="8" max="22" value="15" step="0.5" oninput="updateBIK()"></div>
+    <div class="cg"><label>Roll (°) <span class="vd" id="bik-r-v">0</span></label>
+      <input type="range" id="bik-r" min="-20" max="20" value="0" oninput="updateBIK()"></div>
+    <div class="cg"><label>Pitch (°) <span class="vd" id="bik-p-v">0</span></label>
+      <input type="range" id="bik-p" min="-20" max="20" value="0" oninput="updateBIK()"></div>
+    <div class="cg"><label>Yaw (°) <span class="vd" id="bik-y-v">0</span></label>
+      <input type="range" id="bik-y" min="-30" max="30" value="0" oninput="updateBIK()"></div>
+    <button class="sec" onclick="['bik-z','bik-r','bik-p','bik-y'].forEach((id,i)=>{document.getElementById(id).value=[15,0,0,0][i]});updateBIK()">Reset</button>
+  </div>
+  <div class="result-box" id="bik-res" style="font-size:12px;color:var(--accent)">Hover over a leg to see its angles</div>
+
+  <h2>Two-Layer Architecture</h2>
+  <div class="card hi">
+    <p><strong>body_ik(feet_body)</strong> — feet in body frame → call single-leg IK for all 6 legs</p>
+    <p style="margin-top:8px"><strong>body_pose_ik(pose, feet_world)</strong> — rotate/translate feet from world frame into body frame, then call body_ik</p>
+  </div>
+  <div class="formula">foot_body = R_inv × (foot_world − body_translation)
+R = Rz(yaw)·Ry(pitch)·Rx(roll)   (ZYX convention)</div>
+</div>
+
+<!-- ═══ 7 ═══ -->
+<div class="section" id="s-gait">
+  <h1>7. Gaits</h1>
+  <p class="subtitle">Coordinated leg movement patterns</p>
+  <p>A gait assigns each leg a <em>phase offset</em>. When a leg's clock enters its swing window it lifts off; otherwise it's on the ground pushing the body.</p>
+
+  <div class="cv-wrap">
+    <canvas id="c-gait" width="520" height="260"></canvas>
+    <span class="cv-lbl">Timing chart — green=stance, orange=swing | click chart to scrub</span>
+  </div>
+  <div class="ctrls">
+    <div class="cg"><label>Gait type</label>
+      <select id="gait-sel" onchange="gaitTime=0;drawGait()">
+        <option value="tripod">Tripod (fastest)</option>
+        <option value="ripple">Ripple (medium)</option>
+        <option value="wave">Wave (slowest)</option>
+      </select>
+    </div>
+    <button id="gait-play-btn" onclick="toggleGaitPlay()">▶ Play</button>
+    <button class="sec" onclick="gaitTime=0;drawGait()">⏮ Reset</button>
+  </div>
+  <div class="result-box" id="gait-info" style="color:var(--accent)">Tripod: 2 groups of 3 | 50% swing | ≥3 legs always grounded</div>
+
+  <div class="grid3" style="margin-top:16px">
+    <div class="card">
+      <h3>Tripod</h3><p>Groups: {1,3,5} and {2,4,6} alternate. Fastest. Exactly 3 on ground.</p>
+      <p style="color:var(--muted);font-size:12px;margin-top:8px">Duty 50% stance</p></div>
+    <div class="card">
+      <h3>Ripple</h3><p>Three groups of 2, staggered. 4 legs grounded. Medium speed.</p>
+      <p style="color:var(--muted);font-size:12px;margin-top:8px">Duty 67% stance</p></div>
+    <div class="card">
+      <h3>Wave</h3><p>Each leg steps alone. Always 5 grounded. Slowest, most stable.</p>
+      <p style="color:var(--muted);font-size:12px;margin-top:8px">Duty 83% stance</p></div>
+  </div>
+
+  <h2>Turntable — Predictive Foot Placement</h2>
+  <p>When a leg steps, it must land such that the foot is at neutral <em>mid-swing</em>. So it lands half a stride ahead:</p>
+  <div class="formula">landing = neutral + velocity × stance_duration × 0.5
+         + rotate(neutral, omega × stance_duration × 0.5)</div>
+
+  <h2>Walking Simulation</h2>
+  <p>Top-down view. Circles = feet (green=stance, orange=swing). Body in center. Select gait and watch how the footfall pattern coordinates.</p>
+  <div class="cv-wrap">
+    <canvas id="c-walk" width="520" height="320"></canvas>
+    <span class="cv-lbl">Top-down walking simulation</span>
+  </div>
+  <div class="ctrls">
+    <div class="cg"><label>Gait</label>
+      <select id="walk-sel" onchange="walkReset()">
+        <option value="tripod">Tripod</option>
+        <option value="ripple">Ripple</option>
+        <option value="wave">Wave</option>
+      </select>
+    </div>
+    <div class="cg"><label>Speed <span class="vd" id="walk-spd-v">5</span> cm/s</label>
+      <input type="range" id="walk-spd" min="2" max="14" value="5" oninput="document.getElementById('walk-spd-v').textContent=this.value"></div>
+    <button id="walk-play-btn" onclick="toggleWalkPlay()">▶ Play</button>
+    <button class="sec" onclick="walkReset()">⏮ Reset</button>
+  </div>
+</div>
+
+<!-- ═══ 8 ═══ -->
+<div class="section" id="s-bezier">
+  <h1>8. Swing Trajectory (Cubic Bézier)</h1>
+  <p class="subtitle">How the foot moves through the air during a step</p>
+
+  <div class="formula">B(t) = (1−t)³P0 + 3(1−t)²tP1 + 3(1−t)t²P2 + t³P3   t∈[0,1]
+
+P1 = P0 + (0, 0, h×4/3)   P2 = P3 + (0, 0, h×4/3)
+The 4/3 factor: cubic Bézier reaches only 3/4 of ctrl height at t=0.5</div>
+
+  <div class="cv-wrap">
+    <canvas id="c-bz" width="520" height="260"></canvas>
+    <span class="cv-lbl">Foot trajectory — side view</span>
+  </div>
+  <div class="ctrls">
+    <div class="cg"><label>Step height (cm) <span class="vd" id="bz-hv">4</span></label>
+      <input type="range" id="bz-h" min="1" max="12" value="4" oninput="drawBez()"></div>
+    <div class="cg"><label>Stride (cm) <span class="vd" id="bz-sv">8</span></label>
+      <input type="range" id="bz-s" min="2" max="18" value="8" oninput="drawBez()"></div>
+    <div class="cg"><label>t = <span class="vd" id="bz-tv">0.00</span></label>
+      <input type="range" id="bz-t" min="0" max="100" value="0" oninput="drawBez()"></div>
+    <button id="bz-play-btn" onclick="toggleBezPlay()">▶ Animate</button>
+  </div>
+</div>
+
+<!-- ═══ 9 ═══ -->
+<div class="section" id="s-freegait">
+  <h1>9. Free Gait</h1>
+  <p class="subtitle">Reactive stepping based on foot drift</p>
+  <p>No fixed schedule. Each leg steps when its foot drifts too far from neutral. The robot decides independently, but must not tip over.</p>
+
+  <div class="formula">drift = |foot_pos − neutral_pos|
+if drift > threshold → schedule step (land at neutral)</div>
+
+  <h2>Stability Guard: at most 3 non-adjacent legs swinging</h2>
+  <div class="cv-wrap">
+    <canvas id="c-fg" width="520" height="300"></canvas>
+    <span class="cv-lbl">Top-down view | green=grounded, orange=swinging | numbers=drift cm</span>
+  </div>
+  <div class="ctrls">
+    <button id="fg-play-btn" onclick="toggleFGPlay()">▶ Play</button>
+    <button class="sec" onclick="fgReset()">⏮ Reset</button>
+    <div class="cg"><label>Threshold (cm) <span class="vd" id="fg-thr-v">3.0</span></label>
+      <input type="range" id="fg-thr" min="1" max="8" value="3" step="0.5" oninput="document.getElementById('fg-thr-v').value=this.value"></div>
+    <div class="cg"><label>Speed (cm/s) <span class="vd" id="fg-spd-v">5</span></label>
+      <input type="range" id="fg-spd" min="1" max="15" value="5" oninput="document.getElementById('fg-spd-v').value=this.value"></div>
+  </div>
+
+  <ol class="steps">
+    <li>Collect grounded legs where drift > threshold, sort by drift (highest first)</li>
+    <li>For each: skip if adjacent leg is already swinging</li>
+    <li>Skip if ≥3 legs already swinging</li>
+    <li>Emergency: if drift > 2×threshold, allow even with adjacent leg swinging</li>
+    <li>Land at neutral foot position (clamped to reach limits)</li>
+  </ol>
+</div>
+
+<!-- ═══ 10 ═══ -->
+<div class="section" id="s-loop">
+  <h1>10. The Control Loop</h1>
+  <p class="subtitle">20 Hz real-time execution on a background thread</p>
+
+  <h2>State Machine</h2>
+  <div class="card" style="overflow-x:auto">
+    <table style="min-width:500px">
+      <tr><th>Button</th><th>Mode</th><th>What happens</th></tr>
+      <tr><td><span class="tag tg">A</span></td><td>Stand</td><td>IK for neutral pose at 15 cm, MotionPlayer smoothly moves all 18</td></tr>
+      <tr><td><span class="tag to">B</span></td><td>Sit</td><td>All servos → 2048, torque off</td></tr>
+      <tr><td><span class="tag tb">X</span></td><td>Walk</td><td>Cycle gait types; left stick=direction, right stick=turn</td></tr>
+      <tr><td><span class="tag">Back</span></td><td>Free</td><td>FreeGait + full body control</td></tr>
+      <tr><td><span class="tag to">Y</span></td><td>Store</td><td>Fold legs, torque off</td></tr>
+    </table>
+  </div>
+
+  <h2>Gamepad Axes</h2>
+  <div class="formula">Left stick X/Y  → vy, vx    (side/forward velocity cm/s)
+Right stick X   → omega      (rotation rate °/s)
+LT / RT         → height     (body Z ±)
+LB / RB         → reach      (stride size ±)</div>
+
+  <h2>Deadzone Processing</h2>
+  <div class="formula">if |v| < 0.12: return 0
+else: return sign(v) × (|v| − 0.12) / (1 − 0.12)</div>
+
+  <h2>20 Hz Timing</h2>
+  <pre><code>DT = 0.05  # 50 ms target
+t0 = time.monotonic()
+# ... IK + 18 servo writes ...
+elapsed = time.monotonic() - t0
+time.sleep(max(0, DT - elapsed))</code></pre>
+</div>
+
+<!-- ═══ 11 ═══ -->
+<div class="section" id="s-pipeline">
+  <h1>11. The Full Pipeline</h1>
+  <p class="subtitle">Gamepad input → servo tick, every 50 ms</p>
+
+  <div class="cv-wrap"><canvas id="c-pipe" width="520" height="460"></canvas></div>
+
+  <h2>Build Order (from scratch)</h2>
+  <ol class="steps">
+    <li>Serial transport + SCS packet builder/parser</li>
+    <li>Servo register map + ping/read/write/sync_write</li>
+    <li>Single-leg FK and IK + tick conversion</li>
+    <li>Body geometry (corner angles) + body/pose IK</li>
+    <li>Tripod gait with Bézier swing + turntable foot placement</li>
+    <li>Soft limits from JSON, checked before every write</li>
+    <li>SharedState + control thread + stand/sit/walk state machine</li>
+    <li>Web UI with Gamepad API + WebSocket + config sliders</li>
+  </ol>
+
+  <div class="note"><strong>Key insight:</strong> Everything except the gait engine is a pure function per frame — IK, frame transforms, tick conversion. Only the gait accumulates state over time. This makes each layer independently testable.</div>
+</div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════
+const PI=Math.PI, TAU=2*PI;
+const rad=d=>d*PI/180, deg=r=>r*180/PI;
+const cos=Math.cos, sin=Math.sin, atan2=Math.atan2, sqrt=Math.sqrt;
+const acos=Math.acos, hypot=Math.hypot, abs=Math.abs, min=Math.min, max=Math.max;
+const clamp=(v,a,b)=>max(a,min(b,v));
+
+function arrow(ctx,x1,y1,x2,y2,col='#5b8dee',w=1.5){
+  const a=atan2(y2-y1,x2-x1), ah=8;
+  ctx.save(); ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=w;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-ah*cos(a-0.38),y2-ah*sin(a-0.38));
+  ctx.lineTo(x2-ah*cos(a+0.38),y2-ah*sin(a+0.38));
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+function txt(ctx,s,x,y,col='#d4d8f0',sz=12,align='left'){
+  ctx.save(); ctx.fillStyle=col; ctx.font=`${sz}px monospace`; ctx.textAlign=align;
+  ctx.fillText(s,x,y); ctx.restore();
+}
+function circle(ctx,x,y,r,fill,stroke,sw=1.5){
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU);
+  if(fill){ctx.fillStyle=fill;ctx.fill()}
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=sw;ctx.stroke()}
+}
+function line(ctx,x1,y1,x2,y2,col,w=2,dash=[]){
+  ctx.save(); ctx.strokeStyle=col; ctx.lineWidth=w; ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); ctx.restore();
+}
+function rrect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+
+// ═══════════════════════════════════════════════════════
+// NAVIGATION — scroll spy
+// ═══════════════════════════════════════════════════════
+const mainEl=document.getElementById('main');
+mainEl.addEventListener('scroll',()=>{
+  let cur=null;
+  document.querySelectorAll('.section').forEach(s=>{if(s.offsetTop-100<=mainEl.scrollTop)cur=s.id});
+  if(cur) document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+cur));
+},{ passive:true });
+document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>{ /* spy handles highlight */ }));
+
+// ═══════════════════════════════════════════════════════
+// SECTION 1 — BODY TOP-DOWN with hover
+// ═══════════════════════════════════════════════════════
+const LEG_ANGLES=[-30,-90,-150,150,90,30];
+const LEG_NAMES=['FR','MR','RR','RL','ML','FL'];
+const LEG_COLORS=['#5b8dee','#7c5cbf','#e05252','#e05252','#7c5cbf','#5b8dee'];
+let hoveredLeg=-1;
+
+function drawBody(){
+  const cv=document.getElementById('c-body'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height, cx=W/2, cy=H/2+10, R=72, RL=68;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+
+  // hexagon
+  ctx.beginPath();
+  LEG_ANGLES.forEach((a,i)=>{const p=rad(a); i?ctx.lineTo(cx+R*cos(p),cy+R*sin(p)):ctx.moveTo(cx+R*cos(p),cy+R*sin(p))});
+  ctx.closePath(); ctx.fillStyle='#2a2f4a'; ctx.fill(); ctx.strokeStyle='#3e4470'; ctx.lineWidth=2; ctx.stroke();
+
+  // forward arrow
+  arrow(ctx,cx,cy,cx+55,cy,'#4ecb71',2);
+  txt(ctx,'FORWARD',cx+58,cy+4,'#4ecb71',11);
+  arrow(ctx,cx,cy,cx,cy-40,'#5b8dee',1.5);
+  txt(ctx,'+Y',cx+4,cy-42,'#5b8dee',10);
+
+  // legs
+  LEG_ANGLES.forEach((a,i)=>{
+    const ar=rad(a);
+    const cx2=cx+R*cos(ar), cy2=cy+R*sin(ar);
+    const fx=cx+( R+RL)*cos(ar), fy=cy+(R+RL)*sin(ar);
+    const hi=hoveredLeg===i, c=LEG_COLORS[i];
+    // coxa line
+    line(ctx,cx2,cy2,fx,fy,hi?c:c+'88',hi?4:2.5);
+    // pivot
+    circle(ctx,cx2,cy2,hi?8:5,c,null);
+    // foot
+    circle(ctx,fx,fy,hi?8:5,hi?c:'#ffffff33',c,1.5);
+    // label
+    const lx=cx+(R+RL+20)*cos(ar), ly=cy+(R+RL+20)*sin(ar);
+    txt(ctx,(i+1)+' '+LEG_NAMES[i],lx,ly+4,hi?c:c+'99',hi?12:11,'center');
+    // coxa angle annotation on hover
+    if(hi){
+      txt(ctx,`${a}° from +X`,lx,ly+17,c+'cc',10,'center');
+      txt(ctx,`ID: ${(i+1)*10+1}/${(i+1)*10+2}/${(i+1)*10+3}`,lx,ly+30,c+'aa',10,'center');
+    }
+  });
+  circle(ctx,cx,cy,5,'#5b8dee',null);
+  txt(ctx,'FRONT',cx,H-16,'#6b7094',11,'center');
+  txt(ctx,'(body center)',cx,H-3,'#3e4470',10,'center');
+}
+drawBody();
+
+// hover detection for body canvas
+(function(){
+  const cv=document.getElementById('c-body');
+  const W=cv.width, H=cv.height, cx=W/2, cy=H/2+10, R=72, RL=68;
+  cv.addEventListener('mousemove',e=>{
+    const rect=cv.getBoundingClientRect();
+    const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+    let found=-1;
+    LEG_ANGLES.forEach((a,i)=>{
+      const ar=rad(a);
+      const cx2=cx+R*cos(ar), cy2=cy+R*sin(ar);
+      const fx=cx+(R+RL)*cos(ar), fy=cy+(R+RL)*sin(ar);
+      // check if mouse near leg line
+      const dx=fx-cx2, dy=fy-cy2, len=hypot(dx,dy);
+      const t=((mx-cx2)*dx+(my-cy2)*dy)/(len*len);
+      const tc=clamp(t,0,1);
+      const d=hypot(mx-(cx2+tc*dx),my-(cy2+tc*dy));
+      if(d<12) found=i;
+    });
+    if(found!==hoveredLeg){hoveredLeg=found;drawBody();}
+  });
+  cv.addEventListener('mouseleave',()=>{hoveredLeg=-1;drawBody()});
+})();
+
+// ═══════════════════════════════════════════════════════
+// SECTION 1 — LEG SIDE VIEW with highlight
+// ═══════════════════════════════════════════════════════
+let legHighlight=-1; // -1=all, 0=coxa, 1=femur, 2=tibia
+
+function drawLegStatic(){
+  const cv=document.getElementById('c-leg'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+  const sc=5.5, ox=90, oy=95;
+  const CX=6.4*sc, FM=11.0*sc, TB=15.0*sc;
+
+  const hi=i=>legHighlight<0||legHighlight===i;
+  const alpha=i=>hi(i)?'ff':'44';
+
+  // ground
+  const groundY=oy+TB+2;
+  line(ctx,40,groundY,W-20,groundY,'#2e3248',1,[5,5]);
+  txt(ctx,'Ground (z=0)',50,groundY+13,'#2e3248',10);
+
+  // body
+  ctx.fillStyle='#2a2f4a'; ctx.fillRect(ox-40,oy-20,40,40); ctx.strokeStyle='#3e4470'; ctx.lineWidth=1.5; ctx.strokeRect(ox-40,oy-20,40,40);
+  txt(ctx,'BODY',ox-34,oy+5,'#6b7094',10);
+
+  // segments
+  const segments=[
+    [ox,oy, ox+CX,oy, '#5b8dee','Coxa (6.4cm)',0],
+    [ox+CX,oy, ox+CX+FM,oy, '#7c5cbf','Femur (11.0cm)',1],
+    [ox+CX+FM,oy, ox+CX+FM,oy+TB, '#e05252','Tibia (15.0cm)',2],
+  ];
+  segments.forEach(([x1,y1,x2,y2,c,lbl,ji])=>{
+    const a=alpha(ji);
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+    ctx.strokeStyle=c+a; ctx.lineWidth=hi(ji)?6:3; ctx.lineCap='round'; ctx.stroke();
+    txt(ctx,lbl,x1+4,y1-(hi(ji)?14:10),c+a,hi(ji)?12:10);
+  });
+
+  // joints
+  [[ox,oy,'#5b8dee',0],[ox+CX,oy,'#5b8dee',0],[ox+CX+FM,oy,'#7c5cbf',1],[ox+CX+FM,oy+TB,'#e05252',2]].forEach(([x,y,c,ji],k)=>{
+    circle(ctx,x,y,k===3?8:6,c+alpha(ji===2&&k===3?2:ji),null);
+  });
+
+  // foot
+  const fx=ox+CX+FM, fy=oy+TB;
+  circle(ctx,fx,fy,8,'#4ecb71',null);
+  txt(ctx,'Foot',fx+10,fy+4,'#4ecb71',12);
+
+  // annotation
+  txt(ctx,'Neutral: (17.4, 0, −15) cm',200,oy+TB+30,'#6b7094',11);
+
+  // side label: servo IDs
+  txt(ctx,'Servo IDs (leg 1):',ox+CX+FM+30,oy-30,'#6b7094',10);
+  txt(ctx,'11 (coxa)  12 (femur)  13 (tibia)',ox+CX+FM+30,oy-17,'#6b7094',10);
+
+  if(legHighlight>=0){
+    const names=['Coxa','Femur','Tibia'];
+    const descs=['Yaw joint — rotates leg horizontally','Pitch joint — lifts/lowers leg','Pitch joint — extends/retracts foot'];
+    txt(ctx,'► '+names[legHighlight]+': '+descs[legHighlight],40,H-12,'#d4d8f0',11);
+  }
+}
+drawLegStatic();
+
+// ═══════════════════════════════════════════════════════
+// SECTION 2 — TICK SLIDER
+// ═══════════════════════════════════════════════════════
+function updateTick(){
+  const tick=+document.getElementById('tick-sl').value;
+  const d=((tick-2048)*360/4096).toFixed(1);
+  const r=(tick-2048)*TAU/4096;
+  document.getElementById('tick-val').textContent=tick;
+  document.getElementById('deg-val').textContent=d+'°';
+  document.getElementById('rad-val').textContent=(r>=0?'+':'')+r.toFixed(3);
+  drawTickBar(tick);
+}
+function drawTickBar(tick){
+  const cv=document.getElementById('c-tick'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+  const bx=50, bw=W-100, by=50, bh=28;
+
+  // gradient bar
+  const g=ctx.createLinearGradient(bx,0,bx+bw,0);
+  g.addColorStop(0,'#e05252'); g.addColorStop(0.5,'#4ecb71'); g.addColorStop(1,'#5b8dee');
+  ctx.fillStyle=g; rrect(ctx,bx,by,bw,bh,4); ctx.fill();
+
+  // tick marks
+  [0,512,1024,1536,2048,2560,3072,3584,4095].forEach(t=>{
+    const x=bx+t/4095*bw;
+    line(ctx,x,by+bh,x,by+bh+6,'#6b7094',1);
+    if(t%1024===0||t===4095) txt(ctx,String(t),x,by+bh+18,'#6b7094',9,'center');
+  });
+
+  // servo direction labels
+  txt(ctx,'0° (−180°)',bx+bw*0.5,by-10,'#6b7094',9,'center');
+  txt(ctx,'CCW ←',bx,by-10,'#e05252',9,'left');
+  txt(ctx,'→ CW',bx+bw,by-10,'#5b8dee',9,'right');
+
+  // position indicator
+  const px=bx+tick/4095*bw;
+  line(ctx,px,by-10,px,by+bh+6,'#fff',2);
+  circle(ctx,px,by+bh/2,9,'#fff','#1a1d27',2);
+
+  // degree arc indicator
+  const deg_v=(tick-2048)*360/4096;
+  const ar=rad(deg_v), acx=W/2, acy=H-28, acr=20;
+  ctx.beginPath(); ctx.arc(acx,acy,acr,0,TAU); ctx.strokeStyle='#2e3248'; ctx.lineWidth=1.5; ctx.stroke();
+  line(ctx,acx,acy,acx+acr*cos(-PI/2+ar),acy+acr*sin(-PI/2+ar),'#fff',2);
+  circle(ctx,acx,acy,3,'#f5a623',null);
+  txt(ctx,`${deg_v.toFixed(1)}°`,acx+26,acy+4,'#f5a623',11);
+  txt(ctx,'rotation →',acx-60,acy+4,'#6b7094',10);
+}
+drawTickBar(2048);
+
+// ═══════════════════════════════════════════════════════
+// SECTION 3 — COORDINATE FRAMES
+// ═══════════════════════════════════════════════════════
+function drawFrames(){
+  const cv=document.getElementById('c-frames'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+
+  const yaw=+document.getElementById('fr-yaw').value;
+  const bxOff=+document.getElementById('fr-x').value;
+  const byOff=+document.getElementById('fr-y').value;
+  document.getElementById('fr-yaw-v').textContent=yaw;
+  document.getElementById('fr-x-v').textContent=bxOff;
+  document.getElementById('fr-y-v').textContent=byOff;
+
+  const cx=W/2, cy=H/2+10, sc=8;
+
+  // world frame (fixed, at origin)
+  arrow(ctx,cx,cy,cx+65,cy,'#4ecb71',2);
+  txt(ctx,'X_world (forward)',cx+68,cy+4,'#4ecb71',10);
+  arrow(ctx,cx,cy,cx,cy-55,'#5b8dee',2);
+  txt(ctx,'Y_world (left)',cx+4,cy-57,'#5b8dee',10);
+  circle(ctx,cx,cy,5,'#6b7094',null);
+  txt(ctx,'World origin',cx-55,cy+16,'#6b7094',10);
+
+  // body (translated + rotated)
+  const bcx=cx+bxOff*sc, bcy=cy-byOff*sc;
+  const yr=rad(yaw);
+
+  // body hexagon
+  const R=48;
+  ctx.beginPath();
+  LEG_ANGLES.forEach((a,i)=>{const p=rad(a)+yr; i?ctx.lineTo(bcx+R*cos(p),bcy+R*sin(p)):ctx.moveTo(bcx+R*cos(p),bcy+R*sin(p))});
+  ctx.closePath(); ctx.fillStyle='#1d2440'; ctx.fill(); ctx.strokeStyle='#3e4470'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // body frame axes
+  arrow(ctx,bcx,bcy,bcx+55*cos(yr),bcy+55*sin(yr),'#f5a623',2);
+  txt(ctx,'X_body',bcx+57*cos(yr),bcy+57*sin(yr)+4,'#f5a623',10);
+  arrow(ctx,bcx,bcy,bcx+42*cos(yr+PI/2),bcy+42*sin(yr+PI/2),'#e05252',2);
+  txt(ctx,'Y_body',bcx+44*cos(yr+PI/2),bcy+44*sin(yr+PI/2),'#e05252',10);
+  circle(ctx,bcx,bcy,5,'#f5a623',null);
+  txt(ctx,'Body origin',bcx+7,bcy-10,'#f5a623',10);
+
+  // leg frame on front-right corner (index 0, angle -30°)
+  const la=rad(LEG_ANGLES[0])+yr;
+  const lcx=bcx+R*cos(la), lcy=bcy+R*sin(la);
+  arrow(ctx,lcx,lcy,lcx+38*cos(la),lcy+38*sin(la),'#7c5cbf',2);
+  txt(ctx,'X_leg1 (outward)',lcx+40*cos(la),lcy+40*sin(la)+4,'#7c5cbf',10);
+  circle(ctx,lcx,lcy,5,'#7c5cbf',null);
+  txt(ctx,'Leg1 (FR) pivot',lcx+6,lcy-9,'#7c5cbf',10);
+
+  txt(ctx,`Yaw:${yaw}° X:${bxOff}cm Y:${byOff}cm`,W/2,H-10,'#6b7094',11,'center');
+}
+drawFrames();
+
+// ═══════════════════════════════════════════════════════
+// IK MATH (shared)
+// ═══════════════════════════════════════════════════════
+const CX=6.4, FM=11.0, TB=15.0;
+
+function legIK(x,y,z){
+  const tc=deg(atan2(y,x));
+  const rh=hypot(x,y)-CX;
+  const d=hypot(rh,z);
+  if(d>FM+TB+1e-6||d<abs(FM-TB)-1e-6) throw new Error('unreachable');
+  const phi=atan2(z,rh);
+  const cb=(FM*FM+d*d-TB*TB)/(2*FM*d);
+  const beta=acos(clamp(cb,-1,1));
+  const tf_deg=deg(phi+beta);
+  const tf_r=rad(tf_deg);
+  const dr=rh-FM*cos(tf_r);
+  const dz=z-FM*sin(tf_r);
+  const tibia_abs=deg(atan2(dz,dr));
+  const tt=tibia_abs-tf_deg+90;
+  return {tc, tf:tf_deg, tt};
+}
+function legFK(tc,tf,tt){
+  const cr=rad(tc), fr=rad(tf), tr=rad(tt);
+  const r=CX+FM*cos(fr)+TB*sin(fr+tr);
+  const z=FM*sin(fr)-TB*cos(fr+tr);
+  return {x:r*cos(cr), y:r*sin(cr), z};
+}
+function a2t(tc,tf,tt){
+  const s=4096/360;
+  return {c:Math.round(2048-tc*s), f:Math.round(2048-tf*s), t:Math.round(2048+tt*s)};
+}
+
+// ═══════════════════════════════════════════════════════
+// SECTION 4 — FK
+// ═══════════════════════════════════════════════════════
+function updateFK(){
+  const tc=+document.getElementById('fk-c').value;
+  const tf=+document.getElementById('fk-f').value;
+  const tt=+document.getElementById('fk-t').value;
+  document.getElementById('fk-cv').textContent=tc+'°';
+  document.getElementById('fk-fv').textContent=tf+'°';
+  document.getElementById('fk-tv').textContent=tt+'°';
+  const p=legFK(tc,tf,tt);
+  const tk=a2t(tc,tf,tt);
+  document.getElementById('fk-res').textContent=
+    `Foot: (${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}) cm  |  Ticks: 11→${tk.c}  12→${tk.f}  13→${tk.t}`;
+  drawFKLeg(tc,tf,tt);
+}
+
+function drawFKLeg(tc,tf,tt){
+  const cv=document.getElementById('c-fk'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+
+  // ── SIDE VIEW (r-z plane) ────────────────────────────
+  const sc=7.5, ox=115, oy=H/2+10;
+  const fr=rad(tf), tr=rad(tt), cr=rad(tc);
+
+  const rC=CX;
+  const rF=CX+FM*cos(fr), zF=FM*sin(fr);
+  const rFt=rF+TB*sin(fr+tr), zFt=zF-TB*cos(fr+tr);
+
+  const px=r=>ox+r*sc, pz=z=>oy-z*sc;
+
+  // ground ref
+  line(ctx,30,pz(-15),W*0.65,pz(-15),'#2e3248',1,[5,5]);
+  txt(ctx,'z=−15 (stand height)',35,pz(-15)-4,'#2e3248',9);
+  // horizontal ref
+  line(ctx,ox,pz(0),W*0.65,pz(0),'#1e2133',1,[3,3]);
+  txt(ctx,'z=0',W*0.65+3,pz(0)+4,'#1e2133',9);
+
+  // body block
+  ctx.fillStyle='#2a2f4a'; ctx.fillRect(ox-50,pz(0)-20,50,40);
+  ctx.strokeStyle='#3e4470'; ctx.lineWidth=1.5; ctx.strokeRect(ox-50,pz(0)-20,50,40);
+
+  // coxa (always horizontal)
+  line(ctx,px(0),pz(0),px(rC),pz(0),'#5b8dee',5);
+  // femur
+  line(ctx,px(rC),pz(0),px(rF),pz(zF),'#7c5cbf',5);
+  // tibia
+  line(ctx,px(rF),pz(zF),px(rFt),pz(zFt),'#e05252',5);
+
+  // joints
+  [[0,0,'#5b8dee'],[rC,0,'#5b8dee'],[rF,zF,'#7c5cbf']].forEach(([r,z,c])=>circle(ctx,px(r),pz(z),6,c,null));
+  // foot
+  circle(ctx,px(rFt),pz(zFt),9,'#4ecb71',null);
+  txt(ctx,`(${rFt.toFixed(1)}, ${zFt.toFixed(1)})`,px(rFt)+12,pz(zFt)+4,'#4ecb71',11);
+
+  // femur angle arc — correct direction
+  const arcR=22;
+  ctx.beginPath();
+  ctx.arc(px(rC),pz(0), arcR, 0, -fr, fr>0);
+  ctx.strokeStyle='#7c5cbf88'; ctx.lineWidth=1.5; ctx.stroke();
+  txt(ctx,`θf=${tf}°`,px(rC)+arcR+4,pz(0)-4,'#7c5cbf',10);
+
+  // tibia angle arc — measured from straight-down (PI/2 from +r axis in canvas)
+  ctx.beginPath();
+  ctx.arc(px(rF),pz(zF), arcR, PI/2-fr, PI/2-fr-tr, tr>0);
+  ctx.strokeStyle='#e0525288'; ctx.lineWidth=1.5; ctx.stroke();
+  txt(ctx,`θt=${tt}°`,px(rF)+arcR+4,pz(zF)+4,'#e05252',10);
+
+  // axes
+  arrow(ctx,32,pz(0),88,pz(0),'#6b7094',1); txt(ctx,'+r',90,pz(0)+4,'#6b7094',9);
+  arrow(ctx,32,pz(0),32,pz(8),'#6b7094',1); txt(ctx,'+z',24,pz(8),'#6b7094',9);
+
+  // ── TOP VIEW INSET (coxa yaw) ────────────────────────
+  const ix=W-68, iy=H/2-20, ir=42;
+  ctx.fillStyle='#141720'; ctx.strokeStyle='#2e3248'; ctx.lineWidth=1;
+  rrect(ctx,ix-ir-8,iy-ir-18,2*ir+16,2*ir+40,6);
+  ctx.fill(); ctx.stroke();
+  txt(ctx,'top view (coxa)',ix,iy-ir-8,'#6b7094',9,'center');
+
+  // neutral direction (dashed)
+  line(ctx,ix,iy,ix+ir,iy,'#3e4470',1,[3,3]);
+  txt(ctx,'neutral',ix+ir+2,iy+3,'#3e4470',9);
+
+  // coxa direction
+  line(ctx,ix,iy,ix+ir*cos(cr),iy+ir*sin(cr),'#5b8dee',2);
+  // arc — FIXED: tc>0 means CCW, counterclockwise=true when angle>0
+  if(abs(tc)>0.5){
+    ctx.beginPath();
+    ctx.arc(ix,iy,18, 0, cr, tc<0);
+    ctx.strokeStyle='#5b8dee88'; ctx.lineWidth=1.5; ctx.stroke();
+  }
+  circle(ctx,ix,iy,4,'#2a2f4a',null);
+  circle(ctx,ix+ir*cos(cr),iy+ir*sin(cr),4,'#5b8dee',null);
+  txt(ctx,`θc=${tc}°`,ix,iy+ir+16,'#5b8dee',10,'center');
+}
+updateFK();
+
+// ═══════════════════════════════════════════════════════
+// SECTION 5 — IK with drag
+// ═══════════════════════════════════════════════════════
+let ikTgt={x:17.4, z:-15}, ikDragging=false;
+const IK_SC=7.5, IK_OX=90, IK_OY=160;
+const ik2px=(r,sc,ox)=>ox+r*sc;
+const ik2pz=(z,sc,oy)=>oy-z*sc;
+const ikPX=(r)=>ik2px(r,IK_SC,IK_OX);
+const ikPZ=(z)=>ik2pz(z,IK_SC,IK_OY);
+
+function ikFromCanvas(mx,my){
+  return {x:(mx-IK_OX)/IK_SC, z:-(my-IK_OY)/IK_SC};
+}
+
+function drawIK(){
+  const cv=document.getElementById('c-ik'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+
+  // ground
+  const groundY=ikPZ(-15);
+  line(ctx,20,groundY,W-20,groundY,'#2e3248',1,[5,5]);
+  txt(ctx,'z=−15 (ground)',25,groundY-4,'#2e3248',9);
+
+  // reachability circles (from femur pivot at r=CX)
+  const fp=ikPX(CX);
+  const rMax=(FM+TB)*IK_SC, rMin=abs(FM-TB)*IK_SC;
+  ctx.beginPath(); ctx.arc(fp,ikPZ(0),rMax,0,TAU); ctx.strokeStyle='#4ecb7133'; ctx.lineWidth=1; ctx.stroke();
+  ctx.beginPath(); ctx.arc(fp,ikPZ(0),rMin,0,TAU); ctx.strokeStyle='#e0525233'; ctx.lineWidth=1; ctx.stroke();
+  txt(ctx,'max reach',fp+rMax+3,ikPZ(0),'#4ecb7155',9);
+  txt(ctx,'min reach',fp+rMin+3,ikPZ(0)+11,'#e0525255',9);
+
+  // body
+  ctx.fillStyle='#2a2f4a'; ctx.fillRect(IK_OX-50,ikPZ(0)-20,50,40); ctx.strokeStyle='#3e4470'; ctx.lineWidth=1.5; ctx.strokeRect(IK_OX-50,ikPZ(0)-20,50,40);
+
+  // target crosshair
+  const tx=ikPX(ikTgt.x), tz=ikPZ(ikTgt.z);
+  ctx.beginPath(); ctx.arc(tx,tz,12,0,TAU); ctx.fillStyle='#f5a62322'; ctx.fill();
+  ctx.beginPath(); ctx.arc(tx,tz,12,0,TAU); ctx.strokeStyle='#f5a623'; ctx.lineWidth=2; ctx.stroke();
+  line(ctx,tx-14,tz,tx+14,tz,'#f5a62388',1);
+  line(ctx,tx,tz-14,tx,tz+14,'#f5a62388',1);
+  txt(ctx,`(${ikTgt.x.toFixed(1)},${ikTgt.z.toFixed(1)})`,tx+14,tz-2,'#f5a623',10);
+
+  try {
+    const {tc,tf,tt}=legIK(ikTgt.x,0,ikTgt.z);
+    const fr=rad(tf), tr=rad(tt);
+    const rC=CX, rF=CX+FM*cos(fr), zF=FM*sin(fr);
+    const rFt=rF+TB*sin(fr+tr), zFt=zF-TB*cos(fr+tr);
+
+    // IK triangle construction (faint)
+    ctx.beginPath(); ctx.moveTo(ikPX(rC),ikPZ(0)); ctx.lineTo(tx,tz);
+    ctx.strokeStyle='#f5a62322'; ctx.lineWidth=1; ctx.setLineDash([3,3]); ctx.stroke(); ctx.setLineDash([]);
+
+    line(ctx,ikPX(0),ikPZ(0),ikPX(rC),ikPZ(0),'#5b8dee',5);
+    line(ctx,ikPX(rC),ikPZ(0),ikPX(rF),ikPZ(zF),'#7c5cbf',5);
+    line(ctx,ikPX(rF),ikPZ(zF),ikPX(rFt),ikPZ(zFt),'#e05252',5);
+
+    [[0,0,'#5b8dee'],[rC,0,'#5b8dee'],[rF,zF,'#7c5cbf']].forEach(([r,z,c])=>circle(ctx,ikPX(r),ikPZ(z),6,c,null));
+    circle(ctx,ikPX(rFt),ikPZ(zFt),9,'#4ecb71',null);
+
+    const tk=a2t(tc,tf,tt);
+    document.getElementById('ik-angles').textContent=`Angles: coxa ${tc.toFixed(1)}° | femur ${tf.toFixed(1)}° | tibia ${tt.toFixed(1)}°`;
+    document.getElementById('ik-ticks').textContent=`Ticks: 11→${tk.c}  12→${tk.f}  13→${tk.t}`;
+    document.getElementById('ik-err').textContent='';
+  } catch(e){
+    // show grey ghost
+    line(ctx,ikPX(0),ikPZ(0),ikPX(CX),ikPZ(0),'#5b8dee44',5);
+    circle(ctx,ikPX(0),ikPZ(0),6,'#5b8dee44',null);
+    document.getElementById('ik-angles').textContent='—';
+    document.getElementById('ik-ticks').textContent='—';
+    document.getElementById('ik-err').textContent='⚠ Target out of reach — IKError raised';
+    // shade unreachable zone
+    ctx.fillStyle='#e0525211';
+    ctx.beginPath(); ctx.arc(tx,tz,16,0,TAU); ctx.fill();
+  }
+
+  arrow(ctx,22,ikPZ(0),80,ikPZ(0),'#6b7094',1); txt(ctx,'+r',82,ikPZ(0)+4,'#6b7094',9);
+  arrow(ctx,22,ikPZ(0),22,ikPZ(8),'#6b7094',1); txt(ctx,'+z',14,ikPZ(8),'#6b7094',9);
+  txt(ctx,'Click or drag to move target',W/2,H-10,'#3e4470',10,'center');
+}
+
+(function(){
+  const cv=document.getElementById('c-ik');
+  function fromEv(e){
+    const r=cv.getBoundingClientRect();
+    const src=e.touches?e.touches[0]:e;
+    return ikFromCanvas(src.clientX-r.left, src.clientY-r.top);
+  }
+  function onDown(e){e.preventDefault();ikDragging=true;const p=fromEv(e);ikTgt=p;drawIK();}
+  function onMove(e){if(!ikDragging)return;e.preventDefault();const p=fromEv(e);ikTgt=p;drawIK();}
+  function onUp(){ikDragging=false;}
+  cv.addEventListener('mousedown',onDown);
+  cv.addEventListener('mousemove',onMove);
+  document.addEventListener('mouseup',onUp);
+  cv.addEventListener('touchstart',onDown,{passive:false});
+  cv.addEventListener('touchmove',onMove,{passive:false});
+  cv.addEventListener('touchend',onUp);
+})();
+drawIK();
+
+// ═══════════════════════════════════════════════════════
+// IK WORKSPACE canvas
+// ═══════════════════════════════════════════════════════
+(function(){
+  const cv=document.getElementById('c-ikws');
+  if(!cv) return;
+  const ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  // z increases upward (positive z = above femur pivot)
+  // oy = canvas Y for z=0; sc pixels per cm
+  const sc=5.5, ox=50, oy=100;
+  const wsPX=r=>ox+r*sc, wsPZ=z=>oy-z*sc;
+
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+
+  // Pre-render reachability field
+  const imgData=ctx.createImageData(W,H);
+  for(let py_=0;py_<H;py_++){
+    for(let px_=0;px_<W;px_++){
+      const rh=(px_-ox)/sc, z=(oy-py_)/sc;
+      if(rh<0) continue;
+      const d=hypot(rh,z);
+      if(d<=FM+TB+0.05 && d>=abs(FM-TB)-0.05){
+        const idx=(py_*W+px_)*4;
+        imgData.data[idx]=30; imgData.data[idx+1]=80; imgData.data[idx+2]=50; imgData.data[idx+3]=160;
+      }
+    }
+  }
+  ctx.putImageData(imgData,0,0);
+
+  // Ground line at z=-15
+  line(ctx,0,wsPZ(-15),W,wsPZ(-15),'#2e3248',1,[5,5]);
+  txt(ctx,'z=−15 (stand)',ox+4,wsPZ(-15)-4,'#2e3248',9);
+
+  // Reach circles from femur pivot
+  const fpc=wsPX(CX), fpz_=wsPZ(0);
+  ctx.beginPath(); ctx.arc(fpc,fpz_,(FM+TB)*sc,0,TAU); ctx.strokeStyle='#4ecb7144'; ctx.lineWidth=1; ctx.stroke();
+  ctx.beginPath(); ctx.arc(fpc,fpz_,abs(FM-TB)*sc,0,TAU); ctx.strokeStyle='#e0525244'; ctx.lineWidth=1; ctx.stroke();
+  txt(ctx,'r_max=32.4',wsPX(CX+FM+TB)+4,fpz_,'#4ecb7166',9);
+  txt(ctx,'r_min=4.0',wsPX(CX+abs(FM-TB))+4,fpz_+12,'#e0525266',9);
+
+  // Neutral foot marker
+  circle(ctx,wsPX(17.4),wsPZ(-15),7,'#f5a623',null);
+  txt(ctx,'neutral (17.4, −15)',wsPX(17.4)+10,wsPZ(-15)+4,'#f5a623',10);
+
+  // Axes
+  arrow(ctx,ox-20,wsPZ(0),W-10,wsPZ(0),'#6b7094',1); txt(ctx,'+r',W-8,wsPZ(0)+4,'#6b7094',9);
+  arrow(ctx,ox,wsPZ(-20),ox,wsPZ(14),'#6b7094',1); txt(ctx,'+z',ox+4,wsPZ(14),'#6b7094',9);
+
+  // Tick marks on r axis
+  for(let r=0;r<=30;r+=5){
+    const x=wsPX(r), y=wsPZ(0);
+    line(ctx,x,y,x,y+5,'#3e4470',1);
+    txt(ctx,`${r}`,x,y+14,'#3e4470',9,'center');
+  }
+  // Tick marks on z axis
+  for(let z=10;z>=-25;z-=5){
+    const y=wsPZ(z);
+    line(ctx,ox-5,y,ox,y,'#3e4470',1);
+    txt(ctx,`${z}`,ox-8,y+4,'#3e4470',9,'right');
+  }
+
+  txt(ctx,'green = reachable workspace  |  drag IK target above to explore',W/2,H-8,'#3e4470',9,'center');
+})();
+
+// ═══════════════════════════════════════════════════════
+// SECTION 6 — BODY IK (oblique 3D projection)
+// ═══════════════════════════════════════════════════════
+const BODY_R=8.85, NEUTRAL_R=17.4;
+
+// Oblique projection: X=right, Z=up, Y goes back-left at 45°
+function proj3d(x,y,z,cx,cy,sc){
+  const sx=cx+(x-y*0.45)*sc;
+  const sy=cy-(z+y*0.25)*sc;
+  return {sx,sy};
+}
+
+function rotVec(v, roll_r, pitch_r, yaw_r){
+  // Rz(yaw)*Ry(pitch)*Rx(roll)
+  let [x,y,z]=[v.x,v.y,v.z];
+  let y2=y*cos(roll_r)-z*sin(roll_r), z2=y*sin(roll_r)+z*cos(roll_r);
+  [y,z]=[y2,z2];
+  let x3=x*cos(pitch_r)+z*sin(pitch_r), z3=-x*sin(pitch_r)+z*cos(pitch_r);
+  [x,z]=[x3,z3];
+  let x4=x*cos(yaw_r)-y*sin(yaw_r), y4=x*sin(yaw_r)+y*cos(yaw_r);
+  [x,y]=[x4,y4];
+  return {x,y,z};
+}
+function rotVecInv(v, roll_r, pitch_r, yaw_r){
+  // Inverse: Rx(-roll)*Ry(-pitch)*Rz(-yaw)
+  let [x,y,z]=[v.x,v.y,v.z];
+  let x2=x*cos(-yaw_r)-y*sin(-yaw_r), y2=x*sin(-yaw_r)+y*cos(-yaw_r);
+  [x,y]=[x2,y2];
+  let x3=x*cos(-pitch_r)+z*sin(-pitch_r), z3=-x*sin(-pitch_r)+z*cos(-pitch_r);
+  [x,z]=[x3,z3];
+  let y4=y*cos(-roll_r)-z*sin(-roll_r), z4=y*sin(-roll_r)+z*cos(-roll_r);
+  [y,z]=[y4,z4];
+  return {x,y,z};
+}
+
+let bikHover=-1;
+function updateBIK(){
+  ['z','r','p','y'].forEach(k=>document.getElementById(`bik-${k}-v`).textContent=document.getElementById(`bik-${k}`).value);
+  drawBIK();
+}
+function drawBIK(){
+  const cv=document.getElementById('c-bik'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+
+  const height=+document.getElementById('bik-z').value;
+  const rollD=+document.getElementById('bik-r').value;
+  const pitchD=+document.getElementById('bik-p').value;
+  const yawD=+document.getElementById('bik-y').value;
+  const rollR=rad(rollD), pitchR=rad(pitchD), yawR=rad(yawD);
+
+  // ── LEFT: OBLIQUE 3D VIEW ──────────────────────────
+  const sc=4.8, cx=W*0.42, cy=H/2+30;
+
+  // ground plane (grid)
+  for(let x=-3;x<=3;x++){
+    const p1=proj3d(x*8,20,0,cx,cy,sc), p2=proj3d(x*8,-20,0,cx,cy,sc);
+    line(ctx,p1.sx,p1.sy,p2.sx,p2.sy,'#1e2133',1);
+  }
+  for(let y=-2;y<=2;y++){
+    const p1=proj3d(-24,y*8,0,cx,cy,sc), p2=proj3d(24,y*8,0,cx,cy,sc);
+    line(ctx,p1.sx,p1.sy,p2.sx,p2.sy,'#1e2133',1);
+  }
+
+  // foot positions (world frame, z=0) — always on ground
+  const feetWorld=LEG_ANGLES.map(a=>({
+    x:(BODY_R+NEUTRAL_R)*cos(rad(a)),
+    y:(BODY_R+NEUTRAL_R)*sin(rad(a)),
+    z:0
+  }));
+
+  // body center in world
+  const bodyCenter={x:0,y:0,z:height};
+
+  // body corners: rotate hexagon corners relative to body, then add body center
+  const corners=LEG_ANGLES.map(a=>{
+    const bx=BODY_R*cos(rad(a)), by=BODY_R*sin(rad(a));
+    const rot=rotVec({x:bx,y:by,z:0},rollR,pitchR,yawR);
+    return {x:bodyCenter.x+rot.x, y:bodyCenter.y+rot.y, z:bodyCenter.z+rot.z};
+  });
+
+  // ground feet dots
+  feetWorld.forEach((f,i)=>{
+    const p=proj3d(f.x,f.y,f.z,cx,cy,sc);
+    circle(ctx,p.sx,p.sy,5,LEG_COLORS[i]+'88',LEG_COLORS[i],1);
+  });
+
+  // legs from corner to foot
+  corners.forEach((c,i)=>{
+    const f=feetWorld[i];
+    const pc=proj3d(c.x,c.y,c.z,cx,cy,sc);
+    const pf=proj3d(f.x,f.y,f.z,cx,cy,sc);
+    const hi=bikHover===i;
+    ctx.beginPath(); ctx.moveTo(pc.sx,pc.sy); ctx.lineTo(pf.sx,pf.sy);
+    ctx.strokeStyle=LEG_COLORS[i]+(hi?'ff':'aa'); ctx.lineWidth=hi?3:2; ctx.stroke();
+    circle(ctx,pc.sx,pc.sy,hi?7:4,LEG_COLORS[i],null);
+    circle(ctx,pf.sx,pf.sy,hi?7:5,LEG_COLORS[i]+'66',LEG_COLORS[i],1.5);
+    if(hi) txt(ctx,LEG_NAMES[i],pc.sx+6,pc.sy-8,LEG_COLORS[i],11);
+  });
+
+  // body hexagon
+  ctx.beginPath();
+  corners.forEach((c,i)=>{const p=proj3d(c.x,c.y,c.z,cx,cy,sc);i?ctx.lineTo(p.sx,p.sy):ctx.moveTo(p.sx,p.sy)});
+  ctx.closePath(); ctx.fillStyle='#1d244090'; ctx.fill(); ctx.strokeStyle='#5b8dee88'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // body center
+  const bc=proj3d(0,0,height,cx,cy,sc);
+  circle(ctx,bc.sx,bc.sy,5,'#f5a623',null);
+
+  // axes
+  const o=proj3d(0,0,0,cx,cy,sc);
+  const ax=proj3d(10,0,0,cx,cy,sc), ay=proj3d(0,10,0,cx,cy,sc), az=proj3d(0,0,10,cx,cy,sc);
+  arrow(ctx,o.sx,o.sy,ax.sx,ax.sy,'#4ecb71',1.5); txt(ctx,'X',ax.sx+3,ax.sy+3,'#4ecb71',9);
+  arrow(ctx,o.sx,o.sy,ay.sx,ay.sy,'#5b8dee',1.5); txt(ctx,'Y',ay.sx,ay.sy+10,'#5b8dee',9);
+  arrow(ctx,o.sx,o.sy,az.sx,az.sy,'#e05252',1.5); txt(ctx,'Z',az.sx+3,az.sy,'#e05252',9);
+
+  // ── RIGHT: FRONT VIEW (Y-Z plane looking from +X) ──
+  const rcx=W*0.82, rcy=H/2+30, rsc=4.5;
+  txt(ctx,'front view (Y-Z)',rcx,40,'#6b7094',10,'center');
+
+  // ground
+  line(ctx,rcx-80,rcy,rcx+80,rcy,'#2e3248',1,[4,4]);
+
+  // feet (Y,Z)
+  feetWorld.forEach((f,i)=>{
+    const sx=rcx+f.y*rsc, sy=rcy-f.z*rsc;
+    circle(ctx,sx,sy,5,LEG_COLORS[i]+'88',LEG_COLORS[i],1);
+  });
+
+  // legs + body corners in front view
+  corners.forEach((c,i)=>{
+    const f=feetWorld[i];
+    const pcx=rcx+c.y*rsc, pcy=rcy-c.z*rsc;
+    const pfx=rcx+f.y*rsc, pfy=rcy-f.z*rsc;
+    const hi=bikHover===i;
+    line(ctx,pcx,pcy,pfx,pfy,LEG_COLORS[i]+(hi?'ff':'88'),hi?2.5:1.5);
+    circle(ctx,pcx,pcy,hi?6:4,LEG_COLORS[i],null);
+  });
+
+  // body in front view
+  ctx.beginPath();
+  corners.forEach((c,i)=>{const sx=rcx+c.y*rsc,sy=rcy-c.z*rsc;i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy)});
+  ctx.closePath(); ctx.fillStyle='#1d244090'; ctx.fill(); ctx.strokeStyle='#5b8dee66'; ctx.lineWidth=1.5; ctx.stroke();
+  circle(ctx,rcx,rcy-height*rsc,4,'#f5a623',null);
+
+  // ── Update IK result for hovered leg ──
+  if(bikHover>=0){
+    try {
+      const f=feetWorld[bikHover];
+      // foot in body frame: R_inv*(foot_world - body_center)
+      const fw={x:f.x-bodyCenter.x, y:f.y-bodyCenter.y, z:f.z-bodyCenter.z};
+      const fb=rotVecInv(fw, rollR, pitchR, yawR);
+      // subtract corner in body frame (unrotated hexagon corner)
+      const legA=rad(LEG_ANGLES[bikHover]);
+      const cx_body=BODY_R*cos(legA), cy_body=BODY_R*sin(legA);
+      const dx=fb.x-cx_body, dy=fb.y-cy_body, dz=fb.z;
+      // rotate to leg frame (Rz by -leg_angle)
+      const la=-LEG_ANGLES[bikHover];
+      const lx=dx*cos(rad(la))-dy*sin(rad(la));
+      const ly=dx*sin(rad(la))+dy*cos(rad(la));
+      const lz=dz;
+      const {tc,tf,tt}=legIK(lx,ly,lz);
+      document.getElementById('bik-res').textContent=
+        `Leg ${bikHover+1} (${LEG_NAMES[bikHover]}): coxa=${tc.toFixed(1)}°  femur=${tf.toFixed(1)}°  tibia=${tt.toFixed(1)}°`;
+    } catch(e){
+      document.getElementById('bik-res').textContent=`Leg ${bikHover+1}: IKError — out of reach`;
+    }
+  } else {
+    document.getElementById('bik-res').textContent=`Height:${height}cm  Roll:${rollD}°  Pitch:${pitchD}°  Yaw:${yawD}° — hover a leg dot to see angles`;
+  }
+}
+
+// hover on BIK canvas
+(function(){
+  const cv=document.getElementById('c-bik');
+  cv.addEventListener('mousemove',e=>{
+    const r=cv.getBoundingClientRect();
+    const mx=e.clientX-r.left, my=e.clientY-r.top;
+    const height=+document.getElementById('bik-z').value;
+    const rollR=rad(+document.getElementById('bik-r').value);
+    const pitchR=rad(+document.getElementById('bik-p').value);
+    const yawR=rad(+document.getElementById('bik-y').value);
+    const sc=4.8, cx=cv.width*0.42, cy=cv.height/2+30;
+    let found=-1, bestD=18;
+    LEG_ANGLES.forEach((a,i)=>{
+      const bx=BODY_R*cos(rad(a)), by=BODY_R*sin(rad(a));
+      const rot=rotVec({x:bx,y:by,z:0},rollR,pitchR,yawR);
+      const p=proj3d(rot.x,rot.y,height+rot.z,cx,cy,sc);
+      const d=hypot(mx-p.sx,my-p.sy);
+      if(d<bestD){bestD=d;found=i;}
+    });
+    if(found!==bikHover){bikHover=found;drawBIK();}
+  });
+  cv.addEventListener('mouseleave',()=>{bikHover=-1;drawBIK()});
+})();
+updateBIK();
+
+// ═══════════════════════════════════════════════════════
+// SECTION 7 — GAITS
+// ═══════════════════════════════════════════════════════
+const GAIT_DEFS={
+  tripod:{phases:[0,0.5,0,0.5,0,0.5], swing:0.5, info:'Tripod: 2 groups of 3 | 50% swing | ≥3 legs always grounded'},
+  ripple:{phases:[0,1/3,2/3,0,1/3,2/3], swing:1/3, info:'Ripple: 3 groups of 2 | 33% swing | ≥4 legs always grounded'},
+  wave:  {phases:[0,1/6,2/6,3/6,4/6,5/6], swing:1/6, info:'Wave: 6 groups of 1 | 17% swing | ≥5 legs always grounded'},
+};
+let gaitTime=0, gaitPlaying=false, gaitRAF=null;
+
+function toggleGaitPlay(){
+  gaitPlaying=!gaitPlaying;
+  document.getElementById('gait-play-btn').textContent=gaitPlaying?'⏸ Pause':'▶ Play';
+  if(gaitPlaying) animateGait();
+}
+function animateGait(){
+  if(!gaitPlaying){cancelAnimationFrame(gaitRAF);return;}
+  gaitTime=(gaitTime+0.004)%1;
+  drawGait();
+  gaitRAF=requestAnimationFrame(animateGait);
+}
+
+function drawGait(){
+  const cv=document.getElementById('c-gait'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+
+  const gtype=document.getElementById('gait-sel').value;
+  const g=GAIT_DEFS[gtype];
+  const t=gaitTime;
+  document.getElementById('gait-info').textContent=g.info;
+
+  const ml=72,mt=28,mr=16,mb=24;
+  const bw=W-ml-mr, bh=H-mt-mb;
+  const rowH=bh/6, cycles=2;
+
+  // background rows
+  for(let li=0;li<6;li++){
+    const y=mt+li*rowH;
+    const phase=g.phases[li], sw=g.swing;
+
+    ctx.fillStyle='#1e2635'; ctx.fillRect(ml,y+1,bw,rowH-2);
+
+    for(let c=0;c<cycles;c++){
+      // swing block
+      const s0=(phase+c)/cycles, s1=(phase+sw+c)/cycles;
+      const x0=ml+s0*bw, x1=ml+s1*bw;
+      if(x1>x0) ctx.fillStyle='#c06820',ctx.fillRect(x0,y+2,x1-x0,rowH-4);
+    }
+
+    // stance/swing label at cursor
+    const swingNow=((t*cycles-g.phases[li]+10)%1)<g.swing;
+    txt(ctx,swingNow?'swing':'stance',ml+bw+4,y+rowH/2+4,swingNow?'#f5a623':'#4ecb71',9);
+    txt(ctx,`L${li+1} ${LEG_NAMES[li]}`,ml-4,y+rowH/2+4,'#d4d8f0',11,'right');
+  }
+
+  // cycle dividers
+  for(let c=0;c<=cycles;c++){
+    const x=ml+c/cycles*bw;
+    line(ctx,x,mt,x,mt+bh,'#2e3248',1);
+    txt(ctx,`${c} cycle`,x,mt-4,'#6b7094',9,'center');
+  }
+
+  // time cursor — FIXED: just t * bw (no modulo bug)
+  const tx=ml+t*bw;
+  line(ctx,tx,mt-2,tx,mt+bh+2,'#4ecb71',2);
+  circle(ctx,tx,mt,5,'#4ecb71',null);
+
+  // legend
+  ctx.fillStyle='#c06820'; ctx.fillRect(ml,mt+bh+6,16,10);
+  txt(ctx,'Swing',ml+20,mt+bh+15,'#d4d8f0',10);
+  ctx.fillStyle='#1e2635'; ctx.fillRect(ml+60,mt+bh+6,16,10); ctx.strokeStyle='#3e4470'; ctx.lineWidth=1; ctx.strokeRect(ml+60,mt+bh+6,16,10);
+  txt(ctx,'Stance',ml+80,mt+bh+15,'#d4d8f0',10);
+}
+// Click to scrub
+document.getElementById('c-gait').addEventListener('click',e=>{
+  const cv=document.getElementById('c-gait');
+  const r=cv.getBoundingClientRect();
+  const ml=72, bw=cv.width-72-16;
+  const x=e.clientX-r.left-ml;
+  gaitTime=clamp(x/bw,0,0.9999);
+  if(!gaitPlaying) drawGait();
+});
+drawGait();
+
+// ═══════════════════════════════════════════════════════
+// WALKING SIMULATION
+// ═══════════════════════════════════════════════════════
+const WALK_BODY_R=8.85, WALK_NEUTRAL_R=17.4;
+const WALK_LEG_ANGLES_DEG=[-30,-90,-150,150,90,30];
+const GAITS_WALK={
+  tripod:{phases:[0,0.5,0,0.5,0,0.5],swing:0.5},
+  ripple:{phases:[0,1/3,2/3,0,1/3,2/3],swing:1/3},
+  wave:{phases:[0,1/6,2/6,3/6,4/6,5/6],swing:1/6}
+};
+
+let walkPlaying=false, walkTime=0, walkRafId=null;
+let walkBodyX=0, walkBodyY=0, walkBodyAngle=0;
+let walkFeet=null;
+
+function walkReset(){
+  walkTime=0; walkBodyX=0; walkBodyY=0; walkBodyAngle=0; walkFeet=null;
+  if(walkRafId){cancelAnimationFrame(walkRafId);walkRafId=null;}
+  walkPlaying=false;
+  document.getElementById('walk-play-btn').textContent='▶ Play';
+  drawWalk();
+}
+
+function toggleWalkPlay(){
+  walkPlaying=!walkPlaying;
+  document.getElementById('walk-play-btn').textContent=walkPlaying?'⏸ Pause':'▶ Play';
+  if(walkPlaying){ walkLastT=null; walkRafId=requestAnimationFrame(walkLoop); }
+}
+
+let walkLastT=null;
+function walkLoop(ts){
+  if(!walkPlaying) return;
+  if(walkLastT==null){ walkLastT=ts; walkRafId=requestAnimationFrame(walkLoop); return; }
+  const dt=min((ts-walkLastT)/1000,0.05);
+  walkLastT=ts;
+  stepWalk(dt);
+  drawWalk();
+  walkRafId=requestAnimationFrame(walkLoop);
+}
+
+function getWalkGait(){
+  const name=document.getElementById('walk-sel').value;
+  return GAITS_WALK[name]||GAITS_WALK.tripod;
+}
+
+function initWalkFeet(){
+  walkFeet=WALK_LEG_ANGLES_DEG.map(a=>{
+    const ar=rad(a);
+    return {
+      wx:(WALK_BODY_R+WALK_NEUTRAL_R)*cos(ar),
+      wy:(WALK_BODY_R+WALK_NEUTRAL_R)*sin(ar),
+      swinging:false, swingT:0,
+      liftX:0,liftY:0, landX:0,landY:0
+    };
+  });
+}
+
+function stepWalk(dt){
+  const g=getWalkGait();
+  const spd=+document.getElementById('walk-spd').value;
+  const period=6; // seconds per full cycle
+  const stanceDur=(1-g.swing)*period;
+  const vx=spd; // walk forward (body X)
+  walkBodyX+=vx*dt;
+
+  if(!walkFeet) initWalkFeet();
+
+  walkTime=(walkTime+dt/period)%1;
+
+  WALK_LEG_ANGLES_DEG.forEach((angDeg,i)=>{
+    const f=walkFeet[i];
+    const legPhase=((walkTime-g.phases[i]+100)%1);
+    const inSwing=legPhase<g.swing;
+
+    if(f.swinging&&!inSwing){
+      f.swinging=false;
+      f.wx=f.landX; f.wy=f.landY;
+    }
+    if(!f.swinging&&inSwing){
+      f.swinging=true; f.swingT=0;
+      f.liftX=f.wx; f.liftY=f.wy;
+      const ar=rad(angDeg);
+      const nx=walkBodyX+(WALK_BODY_R+WALK_NEUTRAL_R)*cos(ar);
+      const ny=walkBodyY+(WALK_BODY_R+WALK_NEUTRAL_R)*sin(ar);
+      const ahead=vx*stanceDur*0.5;
+      f.landX=nx+ahead; f.landY=ny;
+    }
+    if(f.swinging){
+      f.swingT=clamp(f.swingT+dt/(g.swing*period),0,1);
+    } else {
+      // stance: foot stays in world, body moves
+    }
+  });
+}
+
+function drawWalk(){
+  const cv=document.getElementById('c-walk');
+  if(!cv) return;
+  const ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+
+  if(!walkFeet) initWalkFeet();
+
+  const sc=3.8;
+  const viewX=walkBodyX, viewY=walkBodyY;
+  const cx=W/2, cy=H/2;
+  const wx=(x)=>cx+(x-viewX)*sc;
+  const wy=(y)=>cy+(y-viewY)*sc;
+
+  // ground grid (world lines)
+  ctx.save();
+  const gridStep=20;
+  const x0=Math.floor((viewX-W/sc/2)/gridStep)*gridStep;
+  const y0=Math.floor((viewY-H/sc/2)/gridStep)*gridStep;
+  for(let gx=x0;gx<x0+W/sc+gridStep;gx+=gridStep) line(ctx,wx(gx),0,wx(gx),H,'#1e2133',1);
+  for(let gy=y0;gy<y0+H/sc+gridStep;gy+=gridStep) line(ctx,0,wy(gy),W,wy(gy),'#1e2133',1);
+  ctx.restore();
+
+  const g=getWalkGait();
+
+  // foot trails and feet
+  walkFeet.forEach((f,i)=>{
+    const col=LEG_COLORS[i];
+    const fx=f.swinging?f.liftX+(f.landX-f.liftX)*f.swingT:f.wx;
+    const fy=f.swinging?f.liftY+(f.landY-f.liftY)*f.swingT:f.wy;
+
+    if(f.swinging){
+      // draw swing arc
+      line(ctx,wx(f.liftX),wy(f.liftY),wx(f.landX),wy(f.landY),col+'33',1,[4,4]);
+      // current position with height indicator
+      const liftH=5*sin(f.swingT*PI);
+      circle(ctx,wx(fx),wy(fy),7+liftH*0.5,col,col+'aa',2);
+      ctx.beginPath(); ctx.arc(wx(fx),wy(fy),4,0,TAU); ctx.fillStyle=col+'cc'; ctx.fill();
+    } else {
+      circle(ctx,wx(fx),wy(fy),6,'#4ecb71aa','#4ecb71',2);
+    }
+    txt(ctx,`L${i+1}`,wx(fx)+8,wy(fy)+4,col,9);
+  });
+
+  // body hexagon
+  const bodyPts=WALK_LEG_ANGLES_DEG.map(a=>{
+    const ar=rad(a);
+    return {x:walkBodyX+WALK_BODY_R*cos(ar), y:walkBodyY+WALK_BODY_R*sin(ar)};
+  });
+  ctx.beginPath();
+  bodyPts.forEach((p,i)=>i?ctx.lineTo(wx(p.x),wy(p.y)):ctx.moveTo(wx(p.x),wy(p.y)));
+  ctx.closePath(); ctx.fillStyle='#1d244090'; ctx.fill(); ctx.strokeStyle='#5b8dee88'; ctx.lineWidth=1.5; ctx.stroke();
+  circle(ctx,cx,cy,4,'#f5a623',null);
+
+  // forward arrow on body
+  const headX=walkBodyX+12, headY=walkBodyY;
+  arrow(ctx,cx,cy,wx(headX),wy(headY),'#f5a623aa',1.5);
+
+  // legs from body corners to feet
+  WALK_LEG_ANGLES_DEG.forEach((angDeg,i)=>{
+    const f=walkFeet[i];
+    const ar=rad(angDeg);
+    const cpx=walkBodyX+WALK_BODY_R*cos(ar), cpy=walkBodyY+WALK_BODY_R*sin(ar);
+    const fx=f.swinging?f.liftX+(f.landX-f.liftX)*f.swingT:f.wx;
+    const fy=f.swinging?f.liftY+(f.landY-f.liftY)*f.swingT:f.wy;
+    line(ctx,wx(cpx),wy(cpy),wx(fx),wy(fy),LEG_COLORS[i]+(f.swinging?'88':'55'),1.5);
+  });
+
+  // gait phase label
+  const gname=document.getElementById('walk-sel').value;
+  txt(ctx,`${gname} | t=${walkTime.toFixed(2)}`,W/2,H-10,'#3e4470',10,'center');
+}
+walkReset();
+
+// ═══════════════════════════════════════════════════════
+// SECTION 8 — BEZIER
+// ═══════════════════════════════════════════════════════
+function cbez(p0,p1,p2,p3,t){
+  const u=1-t;
+  return {
+    x:u*u*u*p0.x+3*u*u*t*p1.x+3*u*t*t*p2.x+t*t*t*p3.x,
+    y:u*u*u*p0.y+3*u*u*t*p1.y+3*u*t*t*p2.y+t*t*t*p3.y
+  };
+}
+
+let bezPlaying=false, bezRAF=null;
+function toggleBezPlay(){
+  bezPlaying=!bezPlaying;
+  document.getElementById('bz-play-btn').textContent=bezPlaying?'⏸ Pause':'▶ Animate';
+  if(bezPlaying) animateBez();
+}
+function animateBez(){
+  if(!bezPlaying){cancelAnimationFrame(bezRAF);return;}
+  const sl=document.getElementById('bz-t');
+  sl.value=(+sl.value+0.8)%101;
+  drawBez();
+  bezRAF=requestAnimationFrame(animateBez);
+}
+
+function drawBez(){
+  const cv=document.getElementById('c-bz'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+
+  const h=+document.getElementById('bz-h').value;
+  const stride=+document.getElementById('bz-s').value;
+  const t=+document.getElementById('bz-t').value/100;
+
+  document.getElementById('bz-hv').textContent=h;
+  document.getElementById('bz-sv').textContent=stride;
+  document.getElementById('bz-tv').textContent=t.toFixed(2);
+
+  const sc=11, cx=W/2, cy=H-50;
+  const px=x=>cx+x*sc, py=y=>cy-y*sc;
+
+  // ground
+  line(ctx,20,cy,W-20,cy,'#2e3248',1,[5,5]);
+  txt(ctx,'Ground',25,cy-4,'#2e3248',10);
+
+  const p0={x:-stride/2,y:0}, p3={x:stride/2,y:0};
+  const ch=h*4/3;
+  const p1={x:-stride/2,y:ch}, p2={x:stride/2,y:ch};
+
+  // control lines
+  line(ctx,px(p0.x),py(p0.y),px(p1.x),py(p1.y),'#3e4470',1,[3,3]);
+  line(ctx,px(p3.x),py(p3.y),px(p2.x),py(p2.y),'#3e4470',1,[3,3]);
+
+  // height lines
+  line(ctx,20,py(h),W-20,py(h),'#4ecb7144',1,[4,4]);
+  txt(ctx,`step height = ${h} cm`,25,py(h)-4,'#4ecb7188',10);
+  line(ctx,20,py(ch),W-20,py(ch),'#6b709444',1,[3,3]);
+  txt(ctx,`ctrl height = ${ch.toFixed(1)} cm (×4/3)`,25,py(ch)-4,'#6b709488',10);
+
+  // curve
+  ctx.beginPath();
+  for(let i=0;i<=100;i++){const b=cbez(p0,p1,p2,p3,i/100);i?ctx.lineTo(px(b.x),py(b.y)):ctx.moveTo(px(b.x),py(b.y))}
+  ctx.strokeStyle='#5b8dee'; ctx.lineWidth=3; ctx.stroke();
+
+  // shade area under curve (above ground)
+  ctx.beginPath();
+  ctx.moveTo(px(p0.x),py(0));
+  for(let i=0;i<=100;i++){const b=cbez(p0,p1,p2,p3,i/100);ctx.lineTo(px(b.x),py(b.y))}
+  ctx.lineTo(px(p3.x),py(0)); ctx.closePath();
+  ctx.fillStyle='#5b8dee18'; ctx.fill();
+
+  // control points
+  [p1,p2].forEach(p=>circle(ctx,px(p.x),py(p.y),5,'#7c5cbf',null));
+  circle(ctx,px(p0.x),py(p0.y),7,'#5b8dee',null);
+  circle(ctx,px(p3.x),py(p3.y),7,'#5b8dee',null);
+  txt(ctx,'P0 (liftoff)',px(p0.x),py(0)+16,'#5b8dee',10,'center');
+  txt(ctx,'P3 (landing)',px(p3.x),py(0)+16,'#5b8dee',10,'center');
+  txt(ctx,'P1',px(p1.x)-14,py(p1.y),'#7c5cbf',10);
+  txt(ctx,'P2',px(p2.x)+4,py(p2.y),'#7c5cbf',10);
+
+  // current foot
+  const cur=cbez(p0,p1,p2,p3,t);
+  circle(ctx,px(cur.x),py(cur.y),10,'#4ecb71','#4ecb71',2);
+  txt(ctx,`t=${t.toFixed(2)}  z=${cur.y.toFixed(1)}cm`,px(cur.x)+12,py(cur.y),'#4ecb71',11);
+  // vertical drop line
+  line(ctx,px(cur.x),py(cur.y),px(cur.x),py(0),'#4ecb7144',1,[2,2]);
+}
+drawBez();
+
+// ═══════════════════════════════════════════════════════
+// SECTION 9 — FREE GAIT
+// ═══════════════════════════════════════════════════════
+const FG_NEUTRAL_R=BODY_R+NEUTRAL_R;
+
+let fgState={
+  bodyX:0,
+  feet:LEG_ANGLES.map(a=>({
+    x:FG_NEUTRAL_R*cos(rad(a)), y:FG_NEUTRAL_R*sin(rad(a)),
+    swinging:false, swingT:0, swingDur:0.4,
+    liftX:0, liftY:0, tgtX:0, tgtY:0
+  }))
+};
+
+let fgPlaying=false, fgRAF=null, fgLast=null;
+
+function toggleFGPlay(){
+  fgPlaying=!fgPlaying;
+  document.getElementById('fg-play-btn').textContent=fgPlaying?'⏸ Pause':'▶ Play';
+  if(fgPlaying){fgLast=null;animateFG();}
+}
+function animateFG(){
+  if(!fgPlaying){cancelAnimationFrame(fgRAF);return;}
+  const now=performance.now();
+  if(fgLast!==null){
+    const dt=min((now-fgLast)/1000, 0.05);
+    fgAdvance(dt);
+  }
+  fgLast=now;
+  drawFG();
+  fgRAF=requestAnimationFrame(animateFG);
+}
+
+function fgNeutral(i){
+  const a=rad(LEG_ANGLES[i]);
+  return {x:fgState.bodyX+FG_NEUTRAL_R*cos(a), y:FG_NEUTRAL_R*sin(a)};
+}
+
+function fgAdvance(dt){
+  const VX=+document.getElementById('fg-spd').value;
+  const THRESHOLD=+document.getElementById('fg-thr').value;
+  const SWING_DUR=0.4;
+
+  fgState.bodyX+=VX*dt;
+
+  // update swinging feet (linear lerp in top-down view)
+  fgState.feet.forEach((f,i)=>{
+    if(!f.swinging) return;
+    f.swingT+=dt;
+    const t=min(1, f.swingT/SWING_DUR);
+    // lerp from liftoff to target (top-down; height not shown)
+    f.x=f.liftX+(f.tgtX-f.liftX)*t;
+    f.y=f.liftY+(f.tgtY-f.liftY)*t;
+    if(t>=1){f.swinging=false; f.x=f.tgtX; f.y=f.tgtY;}
+  });
+
+  // decide which legs to step
+  const drifts=fgState.feet
+    .map((f,i)=>{const n=fgNeutral(i);return {i,d:hypot(f.x-n.x,f.y-n.y),f}})
+    .filter(x=>!x.f.swinging && x.d>=THRESHOLD)
+    .sort((a,b)=>b.d-a.d);
+
+  const swingCount=fgState.feet.filter(f=>f.swinging).length;
+  const adj=(i)=>[(i+5)%6,(i+1)%6];
+
+  for(const {i,d,f} of drifts){
+    if(swingCount>=3) break;
+    const emergency=d>THRESHOLD*2;
+    const adjSwing=adj(i).some(j=>fgState.feet[j].swinging);
+    if(adjSwing && !emergency) continue;
+    const n=fgNeutral(i);
+    f.swinging=true; f.swingT=0;
+    f.liftX=f.x; f.liftY=f.y;
+    f.tgtX=n.x; f.tgtY=n.y;
+  }
+}
+
+function fgReset(){
+  fgPlaying=false;
+  document.getElementById('fg-play-btn').textContent='▶ Play';
+  cancelAnimationFrame(fgRAF);
+  fgState.bodyX=0;
+  fgState.feet=LEG_ANGLES.map(a=>({
+    x:FG_NEUTRAL_R*cos(rad(a)), y:FG_NEUTRAL_R*sin(rad(a)),
+    swinging:false,swingT:0,swingDur:0.4,liftX:0,liftY:0,tgtX:0,tgtY:0
+  }));
+  drawFG();
+}
+
+function drawFG(){
+  const cv=document.getElementById('c-fg'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+
+  const sc=4.2, cx=W/2-fgState.bodyX*sc*0.35, cy=H/2;
+  const bx=fgState.bodyX;
+
+  const proj=(x,y)=>({px:cx+(x-bx*0.35)*sc, py:cy-y*sc});
+
+  // grid
+  for(let gx=-6;gx<=6;gx++){
+    const p1=proj(bx-8+gx*8,-30), p2=proj(bx-8+gx*8,30);
+    line(ctx,p1.px,p1.py,p2.px,p2.py,'#1a1d27',1);
+  }
+
+  // neutral positions (grey dots)
+  LEG_ANGLES.forEach((a,i)=>{
+    const n=fgNeutral(i); const p=proj(n.x,n.y);
+    circle(ctx,p.px,p.py,4,'#2e3248',null);
+  });
+
+  // body hexagon
+  const bcorners=LEG_ANGLES.map(a=>proj(bx+BODY_R*cos(rad(a)), BODY_R*sin(rad(a))));
+  ctx.beginPath(); bcorners.forEach((c,i)=>i?ctx.lineTo(c.px,c.py):ctx.moveTo(c.px,c.py));
+  ctx.closePath(); ctx.fillStyle='#1d2440'; ctx.fill(); ctx.strokeStyle='#3e4470'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // legs and feet
+  const THRESHOLD=+document.getElementById('fg-thr').value;
+  fgState.feet.forEach((f,i)=>{
+    const cp=proj(bx+BODY_R*cos(rad(LEG_ANGLES[i])), BODY_R*sin(rad(LEG_ANGLES[i])));
+    const fp=proj(f.x, f.y);
+    const n=fgNeutral(i);
+    const drift=hypot(f.x-n.x, f.y-n.y);
+
+    // leg line
+    ctx.beginPath(); ctx.moveTo(cp.px,cp.py); ctx.lineTo(fp.px,fp.py);
+    ctx.strokeStyle=LEG_COLORS[i]+(f.swinging?'66':'cc');
+    ctx.lineWidth=f.swinging?1.5:2.5;
+    ctx.setLineDash(f.swinging?[3,3]:[]);
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // foot
+    const footColor=f.swinging?'#f5a623':'#4ecb71';
+    const neutralP=proj(n.x,n.y);
+    // swing target line
+    if(f.swinging){
+      const tp=proj(f.tgtX,f.tgtY);
+      line(ctx,fp.px,fp.py,tp.px,tp.py,'#f5a62344',1,[2,2]);
+    }
+    circle(ctx,fp.px,fp.py,f.swinging?7:8,footColor+'44',footColor,1.5);
+
+    // drift indicator
+    if(drift>0.3){
+      const driftColor=drift>THRESHOLD?'#f5a623':drift>THRESHOLD*0.7?'#f5a62388':'#6b7094';
+      txt(ctx,drift.toFixed(1),fp.px+8,fp.py+3,driftColor,9);
+    }
+    txt(ctx,LEG_NAMES[i],fp.px,fp.py-11,LEG_COLORS[i],9,'center');
+    if(f.swinging){
+      const t=min(1,f.swingT/0.4);
+      txt(ctx,`${Math.round(t*100)}%`,fp.px,fp.py+16,'#f5a623',8,'center');
+    }
+  });
+
+  // forward arrow
+  arrow(ctx,cx-20,20,cx+30,20,'#4ecb71',1.5); txt(ctx,'fwd',cx+32,23,'#4ecb71',9);
+
+  // swinging count indicator
+  const sc_cnt=fgState.feet.filter(f=>f.swinging).length;
+  const grounded=6-sc_cnt;
+  txt(ctx,`Grounded: ${grounded}/6 | Swinging: ${sc_cnt}`,W/2,H-12,sc_cnt>3?'#e05252':'#4ecb71',11,'center');
+  txt(ctx,`Body: ${fgState.bodyX.toFixed(1)} cm | Threshold: ${THRESHOLD} cm`,W/2,H-1,'#6b7094',9,'center');
+}
+drawFG();
+
+// ═══════════════════════════════════════════════════════
+// SECTION 11 — PIPELINE
+// ═══════════════════════════════════════════════════════
+function drawPipeline(){
+  const cv=document.getElementById('c-pipe'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#1a1d27'; ctx.fillRect(0,0,W,H);
+
+  const steps=[
+    {lbl:'① Gamepad Input',    sub:'axes[0..3], buttons[0..16] via Gamepad API',         col:'#5b8dee', file:'web_control.py'},
+    {lbl:'② Deadzone + Scale', sub:'vx, vy (cm/s)  ω (°/s)  — ±0.12 dead zone',         col:'#7c5cbf', file:'thread.py'},
+    {lbl:'③ Gait Engine',      sub:'gait.step(vx,vy,ω,dt) → new pose + 6 foot positions', col:'#f5a623', file:'gait.py'},
+    {lbl:'④ body_pose_ik()',   sub:'world→body→leg frame | single-leg IK ×6 legs',        col:'#4ecb71', file:'body_ik.py + kinematics.py'},
+    {lbl:'⑤ Soft Limit Check', sub:'each angle ∈ [min_deg, max_deg] per joint',           col:'#e05252', file:'soft_limits.py'},
+    {lbl:'⑥ angle_to_tick()', sub:'per-joint sign convention → 0..4095 integer',          col:'#a0b4ff', file:'kinematics.py'},
+    {lbl:'⑦ Sync Write ×18',   sub:'one broadcast packet, all servos move simultaneously', col:'#4ecb71', file:'st3020.py'},
+    {lbl:'⑧ Sleep',            sub:'max(0, 50ms − elapsed)  → maintains 20 Hz',           col:'#6b7094', file:'thread.py'},
+  ];
+
+  const bx=38, bw=W-76, bh=42, gap=12;
+  const totalH=steps.length*(bh+gap)-gap;
+  let y=(H-totalH)/2;
+
+  steps.forEach((s,i)=>{
+    // shadow
+    ctx.fillStyle='#00000033'; rrect(ctx,bx+2,y+2,bw,bh,6); ctx.fill();
+    // box
+    ctx.fillStyle=s.col+'1a'; ctx.strokeStyle=s.col+'66'; ctx.lineWidth=1.5;
+    rrect(ctx,bx,y,bw,bh,6); ctx.fill(); ctx.stroke();
+    txt(ctx,s.lbl,bx+14,y+16,s.col,13);
+    txt(ctx,s.sub,bx+14,y+31,'#6b7094',10);
+    txt(ctx,s.file,bx+bw-10,y+25,'#3e4470',9,'right');
+
+    if(i<steps.length-1){
+      const ay=y+bh, ax=bx+bw/2;
+      line(ctx,ax,ay,ax,ay+gap,'#3e4270',1.5);
+      ctx.beginPath(); ctx.moveTo(ax-5,ay+gap-5); ctx.lineTo(ax,ay+gap); ctx.lineTo(ax+5,ay+gap-5);
+      ctx.strokeStyle='#3e4270'; ctx.lineWidth=1.5; ctx.stroke();
+    }
+    y+=bh+gap;
+  });
+
+  // loop back arrow
+  const ty=(H-totalH)/2, by2=(H+totalH)/2;
+  ctx.beginPath(); ctx.moveTo(bx-8,ty+bh/2); ctx.lineTo(bx-18,ty+bh/2);
+  ctx.lineTo(bx-18,by2-bh/2); ctx.lineTo(bx-8,by2-bh/2);
+  ctx.strokeStyle='#2e3248'; ctx.lineWidth=1.5; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.save(); ctx.translate(bx-22,(ty+by2)/2); ctx.rotate(-PI/2);
+  txt(ctx,'repeat @ 20 Hz',0,4,'#2e3248',9,'center'); ctx.restore();
+}
+drawPipeline();
+
+// ═══════════════════════════════════════════════════════
+// INIT — first active nav link
+// ═══════════════════════════════════════════════════════
+document.querySelector('nav a').classList.add('active');
+</script>
+</body>
+</html>
