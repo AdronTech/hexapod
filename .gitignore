@@ -5,3 +5,6 @@ __pycache__/
 dist/
 *.egg-info/
 .pytest_cache/
+
+# Control-loop recordings (scripts/web_control.py --record)
+recordings/

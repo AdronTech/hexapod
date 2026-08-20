@@ -37,6 +37,8 @@ Controller mapping (Xbox / Steam Deck layout):
   LT / RT          — body height
   LB / RB          — turn left / right  (reach via web UI)
 
+  Mark (web UI)    — timestamp the current moment in a --record recording
+
   D-pad ↑/↓        — translate speed ±0.5 cm/s
   D-pad ←/→        — rotate speed ±2 °/s
 """
@@ -45,6 +47,7 @@ import argparse
 import asyncio
 import json
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -58,6 +61,7 @@ from fastapi.staticfiles import StaticFiles
 from hexapod.control import (
     DEFAULT_CONFIG,
     ControlThread,
+    Recorder,
     SharedState,
     apply_config,
     load_config,
@@ -71,8 +75,14 @@ DEFAULT_HTTP_PORT = 8080
 
 CONFIG_PATH = Path(__file__).parent / "hexapod_config.json"
 WEB_DIR = Path(__file__).parent / "web"
+RECORDING_DIR = Path(__file__).parent.parent / "recordings"
 
 FREE_STEP_THRESHOLD = 3.0  # must match state.py default
+
+
+def default_recording_path() -> Path:
+    return RECORDING_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}.jsonl"
+
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -165,11 +175,27 @@ def main() -> None:
     parser.add_argument(
         "--http-port", default=DEFAULT_HTTP_PORT, type=int, help="HTTP port"
     )
+    parser.add_argument(
+        "--record",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="PATH",
+        help="Record every control tick to a JSONL file for offline analysis "
+        "(default: recordings/<timestamp>.jsonl)",
+    )
     args = parser.parse_args()
 
     shared = SharedState()
     apply_config(load_config(CONFIG_PATH), shared)
-    ctrl = ControlThread(args.port, shared)
+
+    recorder = None
+    if args.record is not None:
+        path = Path(args.record) if args.record else default_recording_path()
+        recorder = Recorder(path, meta={"port": args.port})
+        print(f"Recording control ticks to {path}")
+
+    ctrl = ControlThread(args.port, shared, recorder)
     ctrl.start()
 
     app = build_app(shared)
@@ -178,6 +204,9 @@ def main() -> None:
         uvicorn.run(app, host=args.bind, port=args.http_port, log_level="warning")
     finally:
         ctrl.stop()
+        if recorder is not None:
+            recorder.close()
+            print(f"Recording written to {recorder.path}")
 
 
 if __name__ == "__main__":

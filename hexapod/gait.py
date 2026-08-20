@@ -201,6 +201,27 @@ class _GaitBase:
             0.0,
         )
 
+    def diagnostics(self) -> dict[str, dict]:
+        """
+        Per-leg introspection for recording and offline analysis.
+
+        Not used by the control path — subclasses fill in the swing state that
+        only they know about.  Values are raw floats; the caller rounds.
+        """
+        out: dict[str, dict] = {}
+        for leg in Leg:
+            fx, fy, fz = self._foot_world[leg]
+            nx, ny, _ = self._neutral_foot_world(leg)
+            out[leg.name] = {
+                "foot": [fx, fy, fz],
+                "neutral": [nx, ny],
+                "err": math.hypot(fx - nx, fy - ny),
+                "swing": False,
+                "t": 0.0,
+                "target": None,
+            }
+        return out
+
     def _swing_arc(self, p0: Foot3D, p3: Foot3D, t: float) -> Foot3D:
         """
         Cubic Bezier from p0 to p3 with a smooth arch.
@@ -310,6 +331,18 @@ class _PhasedGait(_GaitBase):
                     )
 
         return self._body, dict(self._foot_world)
+
+    def diagnostics(self) -> dict[str, dict]:
+        d = super().diagnostics()
+        phase = self._clock / self._cycle_time
+        for leg in Leg:
+            e = d[leg.name]
+            rel = (phase - self._offsets[leg]) % 1.0
+            e["swing"] = self._leg_swinging[leg]
+            e["t"] = min(1.0, rel / self._swing_frac) if e["swing"] else 0.0
+            tgt = self._swing_target.get(leg)
+            e["target"] = list(tgt) if tgt is not None else None
+        return d
 
     def _swing_target_for(
         self, leg: Leg, vx: float, vy: float, omega_deg: float
@@ -495,6 +528,20 @@ class FreeGait(_GaitBase):
             swing_count += 1
 
         return self._body, dict(self._foot_world)
+
+    def diagnostics(self) -> dict[str, dict]:
+        d = super().diagnostics()
+        for leg in Leg:
+            e = d[leg.name]
+            e["swing"] = self._swinging[leg]
+            e["t"] = self._swing_t[leg]
+            tgt = self._swing_target.get(leg)
+            e["target"] = list(tgt) if tgt is not None else None
+            # Grounded but already past the step trigger: the leg wants to step
+            # and is being held back by the stability guard.
+            e["due"] = not e["swing"] and e["err"] > self.step_threshold
+            e["emergency"] = e["err"] > self.step_emergency_threshold
+        return d
 
     def _foot_error(self, leg: Leg) -> float:
         nx, ny, _ = self._neutral_foot_world(leg)

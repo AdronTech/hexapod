@@ -229,6 +229,14 @@ function loop() {
 document.querySelectorAll('[data-command]').forEach(el => {
   el.addEventListener('click', () => sendCommand(el.dataset.command));
 });
+
+// Mark has no visible effect on the robot, so flash the button to confirm the
+// timestamp landed in the recording.
+const markBtn = document.getElementById('btn-mark');
+markBtn?.addEventListener('click', () => {
+  markBtn.classList.add('ok');
+  setTimeout(() => markBtn.classList.remove('ok'), 400);
+});
 document.querySelectorAll('[data-gait]').forEach(el => {
   el.addEventListener('click', () => selectGait(el.dataset.gait));
 });

@@ -8,6 +8,7 @@ import time
 from dataclasses import replace
 
 from hexapod.body_ik import BodyPose, body_pose_ik, neutral_foot_body
+from hexapod.control.recorder import Recorder
 from hexapod.control.state import (
     DPAD_CM_RATE,
     DPAD_DEG_RATE,
@@ -75,10 +76,16 @@ def _dead(v: float, deadzone: float = 0.12) -> float:
 
 
 class ControlThread(threading.Thread):
-    def __init__(self, serial_port: str, shared: SharedState) -> None:
+    def __init__(
+        self,
+        serial_port: str,
+        shared: SharedState,
+        recorder: Recorder | None = None,
+    ) -> None:
         super().__init__(daemon=True, name="control")
         self._port = serial_port
         self._shared = shared
+        self._rec = recorder
         self._stop = threading.Event()
 
     def stop(self) -> None:
@@ -94,6 +101,9 @@ class ControlThread(threading.Thread):
                 self._loop(bus, limits)
         except (TransportError, OSError) as e:
             self._shared.set_status(False, False, {}, f"Serial error: {e}")
+        finally:
+            if self._rec is not None:
+                self._rec.close()
 
     def _loop(self, bus: ST3020Bus, limits: SoftLimits | None) -> None:
         pose: BodyPose | None = None
@@ -107,6 +117,9 @@ class ControlThread(threading.Thread):
 
         while not self._stop.is_set():
             t0 = time.monotonic()
+            rec_cmd: tuple[float, float, float] | None = None
+            rec_ticks: dict[Leg, dict[Joint, int]] | None = None
+            rec_err: str | None = None
             axes, buttons, gp_on = self._shared.get_gamepad()
             speed_cm, speed_deg = self._shared.get_speeds()
             step_height, step_time, step_threshold = self._shared.get_step_params()
@@ -117,6 +130,11 @@ class ControlThread(threading.Thread):
             prev_btns = list(buttons)
 
             pending_cmd = self._shared.pop_command()
+
+            if pending_cmd == "mark":
+                if self._rec is not None:
+                    self._rec.mark()
+                pending_cmd = None
 
             if pending_cmd == "store" and not self._stop.is_set():
                 self._shared.set_status(
@@ -318,13 +336,16 @@ class ControlThread(threading.Thread):
                     gait.step_time = step_time
                     gait.step_threshold = step_threshold
 
+                    rec_cmd = (vx, vy, omega)
                     new_pose, new_feet = gait.step(vx, vy, omega, DT)
                     try:
                         ticks = self._compute_ticks(new_pose, new_feet, limits)
                         self._apply_ticks(bus, ticks)
+                        rec_ticks = ticks
                         pose = new_pose
                         feet = new_feet
                     except (IKError, SoftLimitError) as e:
+                        rec_err = str(e)
                         self._shared.bump_ik_errors(str(e))
                         if pose is not None:
                             gait.body = pose
@@ -367,13 +388,16 @@ class ControlThread(threading.Thread):
                     gait.step_height = step_height
                     gait.step_time = step_time
 
+                    rec_cmd = (vx, vy, omega)
                     new_pose, new_feet = gait.step(vx, vy, omega, DT)
                     try:
                         ticks = self._compute_ticks(new_pose, new_feet, limits)
                         self._apply_ticks(bus, ticks)
+                        rec_ticks = ticks
                         pose = new_pose
                         feet = new_feet
                     except (IKError, SoftLimitError) as e:
+                        rec_err = str(e)
                         self._shared.bump_ik_errors(str(e))
                         if pose is not None:
                             gait.body = pose
@@ -423,10 +447,28 @@ class ControlThread(threading.Thread):
                         try:
                             ticks = self._compute_ticks(new_pose, feet, limits)
                             self._apply_ticks(bus, ticks)
+                            rec_ticks = ticks
                             pose = new_pose
                         except (IKError, SoftLimitError) as e:
+                            rec_err = str(e)
                             self._shared.bump_ik_errors(str(e))
                     self._shared.set_status(True, False, self._pose_dict(pose))
+
+            if self._rec is not None:
+                self._rec.tick(
+                    mode=self._mode_name(standing, walk_mode, free_mode),
+                    axes=axes,
+                    buttons=buttons,
+                    speeds=(speed_cm, speed_deg),
+                    step_params=(step_height, step_time, step_threshold),
+                    reach=self._shared.get_reach(),
+                    cmd=rec_cmd,
+                    pose=pose,
+                    gait=gait,
+                    gait_type="free" if free_mode else active_gait_type,
+                    ticks=rec_ticks,
+                    error=rec_err,
+                )
 
             elapsed = time.monotonic() - t0
             rem = DT - elapsed
@@ -434,6 +476,16 @@ class ControlThread(threading.Thread):
                 time.sleep(rem)
 
     # --- helpers ---
+
+    @staticmethod
+    def _mode_name(standing: bool, walk_mode: bool, free_mode: bool) -> str:
+        if not standing:
+            return "idle"
+        if free_mode:
+            return "free"
+        if walk_mode:
+            return "walk"
+        return "pose"
 
     @staticmethod
     def _make_gait(
