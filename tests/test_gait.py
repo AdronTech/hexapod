@@ -287,3 +287,43 @@ def test_phased_gait_foot_excursion_is_centred_on_neutral(cls):
     land = sum(at_land[6:]) / len(at_land[6:])
     lift = sum(at_lift[6:]) / len(at_lift[6:])
     assert land == pytest.approx(lift, rel=0.15)
+
+
+def _arc(step_height: float = 4.0, n: int = 4000):
+    """Sample the swing arc from (0,0,0) to (6,0,0), the tripod stride at 15 cm/s."""
+    gait = TripodGait(
+        BodyPose(z=STAND_HEIGHT), neutral_feet(), step_time=0.4, step_height=step_height
+    )
+    return [gait._swing_arc((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), i / n) for i in range(n + 1)]
+
+
+@pytest.mark.parametrize("step_height", [1.0, 4.0, 12.0])
+def test_swing_arc_peaks_at_step_height(step_height):
+    """The 1.6 control lift has to land the apex on step_height exactly."""
+    pts = _arc(step_height)
+    assert max(p[2] for p in pts) == pytest.approx(step_height, rel=1e-6)
+
+
+def test_swing_arc_lands_and_lifts_with_no_speed():
+    """
+    The doubled end control points are the whole point.  The cubic arc this
+    replaced left and met the ground at 3 × its control height per step_time —
+    40 cm/s with the defaults, driven straight down into the floor.
+    """
+    step_time = 0.4
+    pts = _arc()
+    n = len(pts) - 1
+    for i, name in ((1, "lift-off"), (n - 1, "touchdown")):
+        a, b = pts[i - 1], pts[i + 1]
+        speed = math.hypot(b[0] - a[0], b[2] - a[2]) * n / 2 / step_time
+        assert speed < 0.5, f"{name} at {speed:.2f} cm/s"
+
+
+def test_swing_arc_is_symmetric_and_stays_above_ground():
+    pts = _arc()
+    n = len(pts) - 1
+    assert min(p[2] for p in pts) >= 0.0
+    for i in range(0, n // 2, 37):
+        mirror = pts[n - i]
+        assert pts[i][2] == pytest.approx(mirror[2], abs=1e-9)
+        assert pts[i][0] == pytest.approx(6.0 - mirror[0], abs=1e-9)

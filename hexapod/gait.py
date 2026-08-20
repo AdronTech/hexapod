@@ -15,9 +15,11 @@ Wave   (6 groups of 1):  slowest, 83% duty factor, 5 legs always grounded.
 Free   (event-driven):   each leg steps when its foot drifts from neutral.
 
 Bezier swing:
-    Each swing foot travels along a cubic Bezier curve from its lift-off
-    position to its landing target.  Two inner control points sit directly
-    above the end-points at `step_height`, producing a smooth arch.
+    Each swing foot travels along a quintic Bezier curve from its lift-off
+    position to its landing target.  The end control points are doubled, so
+    the arch leaves and rejoins the ground with zero velocity: seen from the
+    body the foot peels off the flat stance line, rises and falls gently, and
+    settles back onto it without a corner.  See _GaitBase._swing_arc.
 
 Turntable targets:
     The swing foot's landing target is placed half a stance-stride ahead of the
@@ -102,6 +104,13 @@ _NEUTRAL_REACH = COXA_LEN + FEMUR_LEN  # 17.4 cm from coxa pivot to neutral foot
 # re-triggered on the tick it lands.
 _LANDING_LEAD = 0.9
 
+# The two lifted control points of the swing arch, as (fraction of the
+# lift-off → touchdown chord, multiple of step_height).  Symmetric about the
+# middle, so the arch is symmetric.  Moving them apart flattens the top and
+# steepens the flanks; moving them together makes a rounder, pointier arch.
+# 1.6 puts the peak on exactly step_height — see _GaitBase._swing_arc.
+_SWING_CTRL = ((0.35, 1.6), (0.65, 1.6))
+
 # How far inside the support polygon the body centre must stay, in cm, for the
 # free gait to spare another leg.  Zero would mean "exactly on the tipping
 # point"; a few cm leaves room for the body to keep moving during the swing.
@@ -116,13 +125,19 @@ FootMap = dict[Leg, Foot3D]
 # ---------------------------------------------------------------------------
 
 
-def _cubic_bezier(p0: Foot3D, p1: Foot3D, p2: Foot3D, p3: Foot3D, t: float) -> Foot3D:
-    mt = 1.0 - t
-    return (
-        mt**3 * p0[0] + 3 * mt**2 * t * p1[0] + 3 * mt * t**2 * p2[0] + t**3 * p3[0],
-        mt**3 * p0[1] + 3 * mt**2 * t * p1[1] + 3 * mt * t**2 * p2[1] + t**3 * p3[1],
-        mt**3 * p0[2] + 3 * mt**2 * t * p1[2] + 3 * mt * t**2 * p2[2] + t**3 * p3[2],
-    )
+def _bezier(points: list[Foot3D], t: float) -> Foot3D:
+    """Bezier curve of any degree at parameter *t*, by de Casteljau."""
+    pts = points
+    while len(pts) > 1:
+        pts = [
+            (
+                a[0] + (b[0] - a[0]) * t,
+                a[1] + (b[1] - a[1]) * t,
+                a[2] + (b[2] - a[2]) * t,
+            )
+            for a, b in zip(pts, pts[1:])
+        ]
+    return pts[0]
 
 
 # ---------------------------------------------------------------------------
@@ -294,16 +309,34 @@ class _GaitBase:
 
     def _swing_arc(self, p0: Foot3D, p3: Foot3D, t: float) -> Foot3D:
         """
-        Cubic Bezier from p0 to p3 with a smooth arch.
+        Quintic Bezier from p0 to p3 — a flat departure, a gentle rise and
+        fall, and a flat arrival.
 
-        Control points sit directly above the endpoints at step_height.
-        The cubic Bezier peaks at 0.75 × control height at t = 0.5, so the
-        control height is scaled by 4/3 to hit the exact step_height.
+        The six control points are p0, p0, two lifted interior points, p3, p3.
+        Doubling the ends is what makes the landing quiet: a Bezier's velocity
+        at an endpoint is *degree* × the offset to the next control point, so
+        two coincident points there means the foot arrives with zero velocity
+        in every axis, then decelerates into contact rather than driving into
+        it.  Since a stance foot is fixed in the world, zero world velocity at
+        touchdown is also exactly the stance velocity seen from the body: the
+        arch meets the flat stance line tangentially instead of at a corner.
+
+        With both interior points at the same height the arch is symmetric,
+        z(t) = 10·H·t²·(1−t)², which peaks at 0.625·H — hence the 1.6 in
+        _SWING_CTRL, which puts the peak on exactly step_height.
         """
-        h = self.step_height * (4.0 / 3.0)
-        p1 = (p0[0], p0[1], p0[2] + h)
-        p2 = (p3[0], p3[1], p3[2] + h)
-        return _cubic_bezier(p0, p1, p2, p3, t)
+        h = self.step_height
+        pts: list[Foot3D] = [p0, p0]
+        for frac, lift in _SWING_CTRL:
+            pts.append(
+                (
+                    p0[0] + (p3[0] - p0[0]) * frac,
+                    p0[1] + (p3[1] - p0[1]) * frac,
+                    p0[2] + (p3[2] - p0[2]) * frac + h * lift,
+                )
+            )
+        pts.extend((p3, p3))
+        return _bezier(pts, t)
 
 
 # ---------------------------------------------------------------------------

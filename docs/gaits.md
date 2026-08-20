@@ -30,6 +30,38 @@ the lift-off neutral lands every foot a full swing's travel short.
   through neutral and trips the threshold on the far side, so stance duration
   scales with speed instead of being fixed.
 
+## The shape of the arch
+
+Every gait swings its feet along the same curve: a quintic Bezier from lift-off
+to landing, with six control points — `p0, p0, c1, c2, p3, p3`.
+
+The doubled end points are what makes it quiet. A Bezier's velocity at an
+endpoint is *degree* x the offset to the next control point, so two coincident
+points there means the foot **arrives with zero velocity in every axis** and
+decelerates into contact rather than driving into it. A stance foot is fixed in
+the world, so zero world velocity at touchdown is also exactly the stance
+velocity seen from the body: the arch peels off the flat stance line and
+settles back onto it without a corner.
+
+The cubic this replaced put its two control points directly above the
+end-points, which is the opposite — vertical speed is *maximal* at both ends.
+With a 4 cm step height over a 0.40 s swing the foot hit the ground at 40 cm/s,
+which is what the robot sounded like.
+
+`_SWING_CTRL` holds the two lifted points as `(fraction of the chord, multiple
+of step_height)`, symmetric about the middle:
+
+```python
+_SWING_CTRL = ((0.35, 1.6), (0.65, 1.6))
+```
+
+With both at the same height the arch is symmetric, `z(t) = 10*H*t^2*(1-t)^2`,
+peaking at `0.625 * H` — hence 1.6, which puts the apex on exactly
+`step_height`. Moving the pair apart flattens the top and steepens the flanks;
+moving them together gives a rounder, pointier arch. Peak foot speed rises to
+about 1.9 x the chord per `step_time` (the cubic's was 1.5 x), since the same
+distance is now covered with both ends standing still.
+
 ## The free gait's speed budget
 
 A planted foot drifts at its neutral's speed and must be lifted before that
