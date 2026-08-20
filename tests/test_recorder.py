@@ -62,16 +62,37 @@ def test_diagnostics_track_swing_state():
     assert seen_swing
 
 
-def test_free_diagnostics_flag_due_and_emergency():
-    # A tiny threshold with a fast body makes both flags fire.
-    gait = make_free(step_time=0.4, step_threshold=0.5)
-    due = emergency = False
-    for _ in range(80):
-        gait.step(30.0, 0.0, 0.0, DT)
+def test_free_diagnostics_flag_due_legs():
+    # Legs regularly queue up behind the three-at-a-time cap, so "due" fires
+    # in normal walking; "emergency" should not, now that the gait limits the
+    # command to a speed it can service.
+    gait = make_free(step_time=0.4, step_threshold=3.0)
+    due = False
+    for _ in range(200):
+        gait.step(15.0, 0.0, 0.0, DT)
         for entry in gait.diagnostics().values():
             due |= entry["due"]
-            emergency |= entry["emergency"]
-    assert due and emergency
+            assert "emergency" in entry
+    assert due
+
+
+def test_recorder_captures_the_free_gait_command_scale(tmp_path):
+    path = tmp_path / "rec.jsonl"
+    gait = make_free(step_time=0.4, step_threshold=3.0)
+    pose, _ = gait.step(0.0, 0.0, 120.0, DT)  # more than the gait can service
+    with Recorder(path) as rec:
+        rec.tick(
+            mode="free",
+            axes=[0.0] * 8,
+            buttons=[0.0] * 17,
+            speeds=(15.0, 120.0),
+            step_params=(4.0, 0.4, 3.0),
+            reach=17.4,
+            pose=pose,
+            gait=gait,
+            gait_type="free",
+        )
+    assert 0.0 < read(path)[1]["scale"] < 1.0
 
 
 def test_phased_diagnostics_report_swing():

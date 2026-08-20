@@ -349,8 +349,14 @@ class ControlThread(threading.Thread):
                         self._shared.bump_ik_errors(str(e))
                         if pose is not None:
                             gait.body = pose
+                    # The free gait scales the command down to a speed its
+                    # legs can actually service; say so rather than let the
+                    # robot look like it is ignoring the stick.
+                    free_msg = "Free"
+                    if gait.command_scale < 0.99:
+                        free_msg = f"Free — speed limited to {gait.command_scale:.0%}"
                     self._shared.set_status(
-                        True, False, self._pose_dict(pose), "Free", free_mode=True
+                        True, False, self._pose_dict(pose), free_msg, free_mode=True
                     )
 
                 elif standing and walk_mode and gait is not None:

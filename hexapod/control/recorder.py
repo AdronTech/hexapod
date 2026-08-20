@@ -170,6 +170,10 @@ class Recorder:
             rec["legs"] = {
                 name: self._leg_record(d) for name, d in gait.diagnostics().items()
             }
+            # Free gait only: how much of the commanded velocity it could serve.
+            scale = getattr(gait, "command_scale", None)
+            if scale is not None:
+                rec["scale"] = _r(scale, 3)
         if ticks is not None:
             rec["ticks"] = {
                 str(servo_id(leg, j)): ticks[leg][j] for leg in ticks for j in Joint

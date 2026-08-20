@@ -21,4 +21,5 @@ The LEG_INDEX is 1=Front-Right, 2=Middle-Right, 3=Rear-Right, 4=Rear-Left, 5=Mid
 More information:
 Kinematics: @docs/kinematics.md
 Simulator (virtual servo bus, no hardware needed): @docs/simulator.md
+Gaits (tripod/ripple/wave/free, speed budget, stability): @docs/gaits.md
 Control recordings (tick logs for offline debugging): @docs/recording.md

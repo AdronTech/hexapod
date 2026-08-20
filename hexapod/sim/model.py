@@ -22,6 +22,7 @@ from itertools import combinations
 from hexapod.body_ik import corner_pos
 from hexapod.kinematics import COXA_LEN, FEMUR_LEN, TIBIA_LEN, tick_to_angle
 from hexapod.robot.config import Joint, Leg, servo_id
+from hexapod.support import support_margin
 
 CONTACT_EPS = 0.6  # cm — a foot this close to the ground counts as supporting
 PLANE_EPS = 0.05  # cm — tolerance for "this foot is not below the plane"
@@ -161,7 +162,7 @@ def robot_state(positions: dict[int, int]) -> RobotState:
 
     roll, pitch = _roll_pitch(rot)
     support = [(leg.foot[0], leg.foot[1]) for leg in legs if leg.grounded]
-    margin = _support_margin(support)
+    margin = support_margin(support)
     return RobotState(
         legs=legs,
         body_z=height,
@@ -348,55 +349,3 @@ def _fit_rigid_2d(
 # ---------------------------------------------------------------------------
 # Support polygon
 # ---------------------------------------------------------------------------
-
-
-def _support_margin(feet: list[tuple[float, float]]) -> float:
-    """Signed distance from the body center (0, 0) to the support polygon edge."""
-    hull = _convex_hull(feet)
-    if len(hull) < 3:
-        return -1.0
-
-    inside = True
-    best = math.inf
-    for i, p in enumerate(hull):
-        q = hull[(i + 1) % len(hull)]
-        ex, ey = q[0] - p[0], q[1] - p[1]
-        # Hull is counter-clockwise: an interior point is left of every edge
-        if ex * (0.0 - p[1]) - ey * (0.0 - p[0]) < 0:
-            inside = False
-        best = min(best, _segment_distance(p, q))
-    return best if inside else -best
-
-
-def _segment_distance(p: tuple[float, float], q: tuple[float, float]) -> float:
-    """Distance from the origin to the segment p→q."""
-    ex, ey = q[0] - p[0], q[1] - p[1]
-    length_sq = ex * ex + ey * ey
-    if length_sq == 0.0:
-        return math.hypot(p[0], p[1])
-    t = max(0.0, min(1.0, -(p[0] * ex + p[1] * ey) / length_sq))
-    return math.hypot(p[0] + t * ex, p[1] + t * ey)
-
-
-def _convex_hull(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    """Monotone chain hull, counter-clockwise."""
-    pts = sorted(set(points))
-    if len(pts) < 3:
-        return pts
-
-    def cross(o, a, b) -> float:
-        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
-
-    lower: list[tuple[float, float]] = []
-    for p in pts:
-        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
-            lower.pop()
-        lower.append(p)
-
-    upper: list[tuple[float, float]] = []
-    for p in reversed(pts):
-        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
-            upper.pop()
-        upper.append(p)
-
-    return lower[:-1] + upper[:-1]

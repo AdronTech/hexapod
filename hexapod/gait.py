@@ -20,9 +20,19 @@ Bezier swing:
     above the end-points at `step_height`, producing a smooth arch.
 
 Turntable targets:
-    The swing foot's landing target is placed half a stance-stride ahead of
-    the leg's neutral so that mid-stance coincides with neutral (maximum
-    stability window).
+    The swing foot's landing target is placed half a stance-stride ahead of the
+    neutral the leg will have *at touchdown*, so that mid-stance coincides with
+    neutral (maximum stability window).  The free gait instead reaches a
+    fraction of its step threshold past that neutral, so the foot drifts back
+    through neutral and re-triggers on the far side.
+
+Free-gait speed budget:
+    A planted foot has to be picked up before it drifts past `step_threshold`,
+    and a leg cannot swing more often than once per stance, so there is a
+    ceiling on how fast the neutral may travel.  Commands above it are scaled
+    down rather than dragged after — see FreeGait._limit_command.  Rotation
+    reaches the ceiling first: an outer leg's neutral sits ~26 cm out, so a
+    modest yaw rate moves it faster than any walking speed.
 """
 
 import math
@@ -31,6 +41,7 @@ from dataclasses import replace
 from hexapod.body_ik import BodyPose, corner_pos
 from hexapod.kinematics import COXA_LEN, FEMUR_LEN
 from hexapod.robot.config import Leg
+from hexapod.support import support_margin
 
 # ---------------------------------------------------------------------------
 # Phase tables
@@ -86,6 +97,16 @@ _ADJACENT: dict[Leg, frozenset] = {
 
 _NEUTRAL_REACH = COXA_LEN + FEMUR_LEN  # 17.4 cm from coxa pivot to neutral foot
 
+# Fraction of step_threshold that a free-gait foot lands ahead of its neutral.
+# Below 1.0 so touchdown is strictly inside the threshold and the leg is never
+# re-triggered on the tick it lands.
+_LANDING_LEAD = 0.9
+
+# How far inside the support polygon the body centre must stay, in cm, for the
+# free gait to spare another leg.  Zero would mean "exactly on the tipping
+# point"; a few cm leaves room for the body to keep moving during the swing.
+_SUPPORT_MARGIN_MIN = 3.0
+
 Foot3D = tuple[float, float, float]
 FootMap = dict[Leg, Foot3D]
 
@@ -102,19 +123,6 @@ def _cubic_bezier(p0: Foot3D, p1: Foot3D, p2: Foot3D, p3: Foot3D, t: float) -> F
         mt**3 * p0[1] + 3 * mt**2 * t * p1[1] + 3 * mt * t**2 * p2[1] + t**3 * p3[1],
         mt**3 * p0[2] + 3 * mt**2 * t * p1[2] + 3 * mt * t**2 * p2[2] + t**3 * p3[2],
     )
-
-
-def _rotate2d(
-    px: float,
-    py: float,
-    cx: float,
-    cy: float,
-    angle_rad: float,
-) -> tuple[float, float]:
-    """Rotate point (px, py) around centre (cx, cy) by angle_rad."""
-    dx, dy = px - cx, py - cy
-    co, so = math.cos(angle_rad), math.sin(angle_rad)
-    return cx + dx * co - dy * so, cy + dx * so + dy * co
 
 
 # ---------------------------------------------------------------------------
@@ -188,18 +196,74 @@ class _GaitBase:
 
     def _neutral_foot_world(self, leg: Leg) -> Foot3D:
         """World-frame neutral foot position given the current body pose."""
-        yaw = math.radians(self._body.yaw)
-        cx, cy, _ = corner_pos(leg)
-        corner_angle = math.atan2(cy, cx)
-        corner_radius = math.hypot(cx, cy)
-        world_corner_angle = yaw + corner_angle
-        wcx = self._body.x + corner_radius * math.cos(world_corner_angle)
-        wcy = self._body.y + corner_radius * math.sin(world_corner_angle)
+        return self._neutral_foot_world_at(leg, 0.0, 0.0, 0.0, 0.0)
+
+    def _neutral_foot_world_at(
+        self,
+        leg: Leg,
+        vx: float,
+        vy: float,
+        omega_deg: float,
+        dt_ahead: float,
+    ) -> Foot3D:
+        """
+        Where this leg's neutral foot will be *dt_ahead* seconds from now.
+
+        The body pose is projected the same way _advance_body() integrates it,
+        so the answer is exactly where the neutral lands if the commanded
+        velocity holds.  dt_ahead = 0 gives the neutral for the current pose.
+        """
+        wcx, wcy, angle = self._coxa_pivot_world_at(leg, vx, vy, omega_deg, dt_ahead)
         return (
-            wcx + self.neutral_reach * math.cos(world_corner_angle),
-            wcy + self.neutral_reach * math.sin(world_corner_angle),
+            wcx + self.neutral_reach * math.cos(angle),
+            wcy + self.neutral_reach * math.sin(angle),
             0.0,
         )
+
+    def _coxa_pivot_world_at(
+        self,
+        leg: Leg,
+        vx: float,
+        vy: float,
+        omega_deg: float,
+        dt_ahead: float,
+    ) -> tuple[float, float, float]:
+        """
+        World position of this leg's coxa pivot *dt_ahead* seconds from now,
+        plus the outward (neutral coxa) direction in world radians.
+        """
+        bx = self._body.x + vx * dt_ahead
+        by = self._body.y + vy * dt_ahead
+        yaw = math.radians(self._body.yaw + omega_deg * dt_ahead)
+        cx, cy, _ = corner_pos(leg)
+        angle = yaw + math.atan2(cy, cx)
+        corner_radius = math.hypot(cx, cy)
+        return (
+            bx + corner_radius * math.cos(angle),
+            by + corner_radius * math.sin(angle),
+            angle,
+        )
+
+    def _neutral_foot_velocity(
+        self,
+        leg: Leg,
+        vx: float,
+        vy: float,
+        omega_deg: float,
+        dt_ahead: float = 0.0,
+    ) -> tuple[float, float]:
+        """
+        World velocity of this leg's neutral point, v_body + omega x r.
+
+        A planted foot drifts from its neutral at exactly this rate, so it sets
+        both the direction the foot should reach out in and how fast the error
+        accumulates during stance.
+        """
+        nx, ny, _ = self._neutral_foot_world_at(leg, vx, vy, omega_deg, dt_ahead)
+        bx = self._body.x + vx * dt_ahead
+        by = self._body.y + vy * dt_ahead
+        omega_rad = math.radians(omega_deg)
+        return (vx - omega_rad * (ny - by), vy + omega_rad * (nx - bx))
 
     def diagnostics(self) -> dict[str, dict]:
         """
@@ -215,12 +279,18 @@ class _GaitBase:
             out[leg.name] = {
                 "foot": [fx, fy, fz],
                 "neutral": [nx, ny],
-                "err": math.hypot(fx - nx, fy - ny),
+                "err": self._foot_error(leg),
                 "swing": False,
                 "t": 0.0,
                 "target": None,
             }
         return out
+
+    def _foot_error(self, leg: Leg) -> float:
+        """How far this leg's foot has drifted from its neutral, in the ground plane."""
+        nx, ny, _ = self._neutral_foot_world(leg)
+        fx, fy = self._foot_world[leg][0], self._foot_world[leg][1]
+        return math.hypot(fx - nx, fy - ny)
 
     def _swing_arc(self, p0: Foot3D, p3: Foot3D, t: float) -> Foot3D:
         """
@@ -329,6 +399,13 @@ class _PhasedGait(_GaitBase):
                     self._foot_world[leg] = self._swing_arc(
                         p0, p3, rel / self._swing_frac
                     )
+            elif was_swinging:
+                # The swing window closes between ticks, so the last tick of a
+                # swing lands short of t = 1 — leaving the foot parked partway
+                # up its own arch for the whole stance.  Put it down.
+                target = self._swing_target.get(leg)
+                if target is not None:
+                    self._foot_world[leg] = target
 
         return self._body, dict(self._foot_world)
 
@@ -350,15 +427,19 @@ class _PhasedGait(_GaitBase):
         """
         Landing target for a swing foot — the turntable calculation.
 
-        The foot is placed half a stance-stride *ahead* of the current neutral
-        so that mid-stance coincides with neutral (maximum stability window).
+        The foot is placed half a stance-stride ahead of the neutral it will
+        have *when it lands*, so mid-stance coincides with neutral (maximum
+        stability window) and the excursion is symmetric about it.
+
+        Projecting to touchdown matters: the neutral keeps moving during the
+        swing, so aiming at the lift-off neutral lands the foot a full swing's
+        worth of travel behind where it belongs.
         """
-        nx, ny, nz = self._neutral_foot_world(leg)
-        # half the stance duration = time the foot is on the ground / 2
-        half_t = (1.0 - self._swing_frac) * self._cycle_time * 0.5
-        half_omega = math.radians(omega_deg * half_t)
-        rx, ry = _rotate2d(nx, ny, self._body.x, self._body.y, half_omega)
-        return (rx + vx * half_t, ry + vy * half_t, nz)
+        swing_t = self._swing_frac * self._cycle_time
+        half_stance = (1.0 - self._swing_frac) * self._cycle_time * 0.5
+        return self._neutral_foot_world_at(
+            leg, vx, vy, omega_deg, swing_t + half_stance
+        )
 
 
 class TripodGait(_PhasedGait):
@@ -482,6 +563,7 @@ class FreeGait(_GaitBase):
         self._swing_t: dict[Leg, float] = {leg: 0.0 for leg in Leg}
         self._swing_start: FootMap = {}
         self._swing_target: FootMap = {}
+        self.command_scale = 1.0
 
     def step(
         self,
@@ -491,6 +573,7 @@ class FreeGait(_GaitBase):
         dt: float,
     ) -> tuple[BodyPose, FootMap]:
         """Advance gait by *dt* seconds.  See _PhasedGait.step() for parameter docs."""
+        vx, vy, omega_deg = self._limit_command(vx, vy, omega_deg)
         self._advance_body(vx, vy, omega_deg, dt)
 
         # Advance in-flight swings
@@ -521,6 +604,8 @@ class FreeGait(_GaitBase):
             emergency = err > self.step_emergency_threshold
             if not emergency and any(self._swinging[adj] for adj in _ADJACENT[leg]):
                 continue
+            if self._would_lose_support(leg, vx, vy):
+                continue
             self._swing_start[leg] = self._foot_world[leg]
             self._swing_target[leg] = self._swing_target_for(leg, vx, vy, omega_deg)
             self._swing_t[leg] = 0.0
@@ -543,26 +628,88 @@ class FreeGait(_GaitBase):
             e["emergency"] = e["err"] > self.step_emergency_threshold
         return d
 
-    def _foot_error(self, leg: Leg) -> float:
-        nx, ny, _ = self._neutral_foot_world(leg)
-        fx, fy = self._foot_world[leg][0], self._foot_world[leg][1]
-        return math.hypot(fx - nx, fy - ny)
+    def _would_lose_support(self, leg: Leg, vx: float, vy: float) -> bool:
+        """
+        Would lifting *leg* leave the body centre unsupported?
+
+        Counting feet is not enough: three legs of one side are nearly
+        collinear, so the support polygon is a sliver the body centre falls
+        outside of.  This checks the polygon itself, projected to the end of
+        the swing — the body keeps travelling while the leg is in the air, and
+        it is the pose it arrives at that has to hold up.
+
+        The emergency override may ignore the adjacency rule, but not this one.
+        A late leg is recoverable; a robot on its side is not.
+        """
+        cx = self._body.x + vx * self.step_time
+        cy = self._body.y + vy * self.step_time
+        grounded = [
+            (self._foot_world[other][0] - cx, self._foot_world[other][1] - cy)
+            for other in Leg
+            if other is not leg and not self._swinging[other]
+        ]
+        return support_margin(grounded) < _SUPPORT_MARGIN_MIN
+
+    def _limit_command(
+        self, vx: float, vy: float, omega_deg: float
+    ) -> tuple[float, float, float]:
+        """
+        Scale the command back to what the gait can actually service.
+
+        A planted foot drifts at its neutral's speed and has to be picked up
+        before that drift passes step_threshold, and a leg cannot swing more
+        often than once per stance.  That caps the neutral speed the gait can
+        keep up with at (1 + lead) * step_threshold / step_time.
+
+        Commanding more does not move the robot faster — the feet fall behind,
+        every lift becomes an emergency, the adjacency guard stops applying and
+        the legs are dragged until the IK gives out.  Rotation hits the cap
+        first: the neutral of an outer leg sits ~26 cm from the body centre, so
+        a modest yaw rate moves it much faster than any walk speed.
+
+        vx, vy and omega are scaled together, so the robot still travels in the
+        commanded direction — just as fast as its legs can carry it.
+        """
+        budget = (1.0 + _LANDING_LEAD) * self.step_threshold / self.step_time
+        fastest = max(
+            math.hypot(*self._neutral_foot_velocity(leg, vx, vy, omega_deg))
+            for leg in Leg
+        )
+        if fastest <= budget or fastest < 1e-9:
+            self.command_scale = 1.0
+            return vx, vy, omega_deg
+        # The neutral velocity is linear in the command, so this scale is exact.
+        self.command_scale = budget / fastest
+        s = self.command_scale
+        return vx * s, vy * s, omega_deg * s
 
     def _swing_target_for(
         self, leg: Leg, vx: float, vy: float, omega_deg: float
     ) -> Foot3D:
-        nx, ny, nz = self._neutral_foot_world(leg)
-        half_t = self.step_time * 0.5
-        half_omega = math.radians(omega_deg * half_t)
-        rx, ry = _rotate2d(nx, ny, self._body.x, self._body.y, half_omega)
-        tx, ty = rx + vx * half_t, ry + vy * half_t
+        # Aim at the neutral the leg will have when it touches down, not the
+        # one it is leaving: the swing takes step_time, during which the
+        # neutral travels on without it.
+        tx, ty, nz = self._neutral_foot_world_at(leg, vx, vy, omega_deg, self.step_time)
 
-        # Clamp to reachable radius from the coxa pivot
-        cx, cy, _ = corner_pos(leg)
-        wa = math.radians(self._body.yaw) + math.atan2(cy, cx)
-        cr = math.hypot(cx, cy)
-        pivot_x = self._body.x + cr * math.cos(wa)
-        pivot_y = self._body.y + cr * math.sin(wa)
+        # Reach out ahead of that neutral, along the direction the foot will
+        # drift during stance.  The foot then travels through neutral and
+        # trips the step threshold on the far side, giving a stance phase that
+        # lengthens as the robot slows down.  Landing exactly on the threshold
+        # would leave the re-trigger test on a knife edge, so lead by slightly
+        # less and let the leg keep a guaranteed stance.
+        vnx, vny = self._neutral_foot_velocity(leg, vx, vy, omega_deg, self.step_time)
+        speed = math.hypot(vnx, vny)
+        if speed > 1e-9:
+            lead = _LANDING_LEAD * self.step_threshold
+            tx += lead * vnx / speed
+            ty += lead * vny / speed
+
+        # Clamp to reachable radius from the coxa pivot — the one the leg will
+        # be hanging from when it lands, which is a whole swing's travel away
+        # from the one it is leaving.
+        pivot_x, pivot_y, _ = self._coxa_pivot_world_at(
+            leg, vx, vy, omega_deg, self.step_time
+        )
         dx, dy = tx - pivot_x, ty - pivot_y
         dist = math.hypot(dx, dy)
         if dist > 1e-9:

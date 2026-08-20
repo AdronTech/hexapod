@@ -211,6 +211,16 @@ def report_steps(ticks: list[dict], per_leg: bool) -> None:
         f"  step-due ticks    {due_ticks}  {_pct(due_ticks, len(gaited))}"
         "   (a leg past threshold, held back)"
     )
+    # The free gait scales the command to a speed its legs can service.  A low
+    # figure here means the stick was asking for more than the gait can walk.
+    scales = [t["scale"] for t in gaited if "scale" in t]
+    if scales:
+        limited = sum(1 for v in scales if v < 0.99)
+        print(
+            f"  command scale     mean {statistics.fmean(scales):.2f}  "
+            f"min {min(scales):.2f}   limited on {limited} ticks "
+            f"{_pct(limited, len(scales))}"
+        )
 
     # A foot that lands already past the trigger threshold re-lifts on the same
     # tick: the leg never gets a stance phase and the gait stops being
