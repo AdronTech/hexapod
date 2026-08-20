@@ -1,17 +1,16 @@
 import math
-import pytest
 
-from hexapod.kinematics import leg_fk, COXA_LEN, FEMUR_LEN, TIBIA_LEN
-from hexapod.robot.config import Leg
 from hexapod.body_ik import (
     BODY_RADIUS,
-    corner_pos,
-    neutral_foot_body,
-    body_ik,
-    body_pose_ik,
     BodyPose,
     _body_to_leg,
+    body_ik,
+    body_pose_ik,
+    corner_pos,
+    neutral_foot_body,
 )
+from hexapod.kinematics import COXA_LEN, FEMUR_LEN, TIBIA_LEN, leg_fk
+from hexapod.robot.config import Leg
 
 TOL = 1e-4
 

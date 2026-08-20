@@ -16,9 +16,8 @@ Angles are in degrees throughout; positions in centimetres.
 import math
 from dataclasses import dataclass
 
-from hexapod.kinematics import leg_ik, IKError, COXA_LEN, FEMUR_LEN, TIBIA_LEN
+from hexapod.kinematics import COXA_LEN, FEMUR_LEN, TIBIA_LEN, IKError, leg_ik
 from hexapod.robot.config import Leg
-
 
 # ---------------------------------------------------------------------------
 # Body geometry

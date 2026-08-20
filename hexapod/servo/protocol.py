@@ -10,6 +10,7 @@ Packet format:
 """
 
 from dataclasses import dataclass
+
 from .registers import BROADCAST_ID, INST_SYNC_WRITE
 
 

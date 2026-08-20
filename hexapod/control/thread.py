@@ -6,28 +6,27 @@ import math
 import threading
 import time
 from dataclasses import replace
-from typing import Optional
 
 from hexapod.body_ik import BodyPose, body_pose_ik, neutral_foot_body
 from hexapod.control.state import (
-    SharedState,
-    GAITS,
-    STAND_HEIGHT,
-    STAND_SPEED,
-    DT,
-    HEIGHT_MIN,
-    HEIGHT_MAX,
-    REACH_MIN,
-    REACH_MAX,
-    REACH_RATE_CMS,
-    FREE_STEP_EMERGENCY,
-    STORAGE_FEMUR_DEG,
-    STORAGE_TIBIA_DEG,
     DPAD_CM_RATE,
     DPAD_DEG_RATE,
+    DT,
+    FREE_STEP_EMERGENCY,
+    GAITS,
+    HEIGHT_MAX,
+    HEIGHT_MIN,
+    REACH_MAX,
+    REACH_MIN,
+    REACH_RATE_CMS,
+    STAND_HEIGHT,
+    STAND_SPEED,
+    STORAGE_FEMUR_DEG,
+    STORAGE_TIBIA_DEG,
+    SharedState,
 )
-from hexapod.gait import FreeGait, RippleGait, TripodGait, WaveGait, _NEUTRAL_REACH
-from hexapod.kinematics import COXA_LEN, FEMUR_LEN, IKError, angle_to_tick
+from hexapod.gait import _NEUTRAL_REACH, FreeGait, RippleGait, TripodGait, WaveGait
+from hexapod.kinematics import IKError, angle_to_tick
 from hexapod.robot.config import Joint, Leg, servo_id
 from hexapod.robot.soft_limits import SoftLimitError, SoftLimits
 from hexapod.servo.motion import MotionPlayer
@@ -92,9 +91,9 @@ class ControlThread(threading.Thread):
         except (TransportError, OSError) as e:
             self._shared.set_status(False, False, {}, f"Serial error: {e}")
 
-    def _loop(self, bus: ST3020Bus, limits: Optional[SoftLimits]) -> None:
-        pose: Optional[BodyPose] = None
-        feet: Optional[dict[Leg, tuple[float, float, float]]] = None
+    def _loop(self, bus: ST3020Bus, limits: SoftLimits | None) -> None:
+        pose: BodyPose | None = None
+        feet: dict[Leg, tuple[float, float, float]] | None = None
         gait = None
         standing = False
         walk_mode = False
@@ -458,7 +457,7 @@ class ControlThread(threading.Thread):
     def _compute_ticks(
         pose: BodyPose,
         feet: dict[Leg, tuple[float, float, float]],
-        limits: Optional[SoftLimits],
+        limits: SoftLimits | None,
     ) -> dict[Leg, dict[Joint, int]]:
         angles = body_pose_ik(pose, feet)
         ticks: dict[Leg, dict[Joint, int]] = {}
@@ -487,7 +486,7 @@ class ControlThread(threading.Thread):
     def _do_stand(
         self,
         bus: ST3020Bus,
-        limits: Optional[SoftLimits],
+        limits: SoftLimits | None,
     ) -> tuple[BodyPose, dict[Leg, tuple[float, float, float]]]:
         pose = BodyPose(z=STAND_HEIGHT)
         feet = self._neutral_feet()
@@ -511,7 +510,7 @@ class ControlThread(threading.Thread):
                 bus.torque_enable(servo_id(leg, joint), False)
 
     @staticmethod
-    def _do_store(bus: ST3020Bus, limits: Optional[SoftLimits]) -> None:
+    def _do_store(bus: ST3020Bus, limits: SoftLimits | None) -> None:
         for leg in Leg:
             for joint in Joint:
                 bus.torque_enable(servo_id(leg, joint), True)
@@ -546,7 +545,7 @@ class ControlThread(threading.Thread):
                 bus.torque_enable(servo_id(leg, joint), False)
 
     @staticmethod
-    def _pose_dict(pose: Optional[BodyPose]) -> dict:
+    def _pose_dict(pose: BodyPose | None) -> dict:
         if pose is None:
             return {}
         return {

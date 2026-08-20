@@ -1,6 +1,6 @@
-import math
 import pytest
-from hexapod.kinematics import leg_fk, leg_ik, angle_to_tick, tick_to_angle, IKError
+
+from hexapod.kinematics import IKError, angle_to_tick, leg_fk, leg_ik, tick_to_angle
 
 COXA, FEMUR, TIBIA = 6.4, 11.0, 15.0
 

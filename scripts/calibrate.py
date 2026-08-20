@@ -23,17 +23,17 @@ import os
 import select
 import sys
 import termios
-import tty
 import time
+import tty
 from contextlib import contextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from hexapod.servo.transport import SerialTransport, TransportError
+from hexapod.robot.config import Joint, Leg, servo_id
 from hexapod.servo.protocol import ProtocolError
 from hexapod.servo.st3020 import ST3020Bus
-from hexapod.robot.config import Leg, Joint, servo_id
+from hexapod.servo.transport import SerialTransport, TransportError
 
 PORT = "/dev/ttyACM0"
 BAUDRATE = 1_000_000

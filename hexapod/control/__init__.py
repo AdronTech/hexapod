@@ -1,17 +1,17 @@
 from hexapod.control.state import (
-    SharedState,
     DEFAULT_CONFIG,
+    SharedState,
+    apply_config,
     load_config,
     save_config,
-    apply_config,
 )
 from hexapod.control.thread import ControlThread
 
 __all__ = [
-    "SharedState",
     "DEFAULT_CONFIG",
+    "ControlThread",
+    "SharedState",
+    "apply_config",
     "load_config",
     "save_config",
-    "apply_config",
-    "ControlThread",
 ]

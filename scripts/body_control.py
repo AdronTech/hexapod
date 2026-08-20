@@ -26,29 +26,28 @@ Jog key layout (ESC or Ctrl-C to exit jog mode):
     E / Q   +roll  / -roll   (left side up / down)
 """
 
-import sys
-import time
-import tty
-import termios
 import argparse
 import readline  # noqa: F401 — enables arrow-key history in input()
+import sys
+import termios
+import tty
 from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from hexapod.servo.transport import SerialTransport, TransportError
-from hexapod.servo.protocol import ProtocolError
-from hexapod.servo.st3020 import ST3020Bus, PositionCommand
-from hexapod.servo.motion import MotionPlayer
-from hexapod.robot.config import Leg, Joint, servo_id
-from hexapod.robot.soft_limits import SoftLimits, SoftLimitError
-from hexapod.kinematics import angle_to_tick, tick_to_angle, IKError
 from hexapod.body_ik import (
     BodyPose,
     body_pose_ik,
     neutral_foot_body,
 )
+from hexapod.kinematics import IKError, angle_to_tick
+from hexapod.robot.config import Joint, Leg, servo_id
+from hexapod.robot.soft_limits import SoftLimitError, SoftLimits
+from hexapod.servo.motion import MotionPlayer
+from hexapod.servo.protocol import ProtocolError
+from hexapod.servo.st3020 import PositionCommand, ST3020Bus
+from hexapod.servo.transport import SerialTransport, TransportError
 
 DEFAULT_PORT = "/dev/ttyACM0"
 DEFAULT_STAND_HEIGHT = 15.0  # cm
@@ -134,7 +133,7 @@ def print_pose(
     limits: SoftLimits | None,
 ) -> None:
     print()
-    print(f"  Body pose:")
+    print("  Body pose:")
     print(f"    x={pose.x:+6.2f} cm   y={pose.y:+6.2f} cm   z={pose.z:+6.2f} cm")
     print(
         f"    roll={pose.roll:+6.2f}°   pitch={pose.pitch:+6.2f}°   yaw={pose.yaw:+6.2f}°"

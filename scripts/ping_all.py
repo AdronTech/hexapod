@@ -6,9 +6,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from hexapod.servo.transport import SerialTransport
+from hexapod.robot.config import Joint, Leg, servo_id
 from hexapod.servo.st3020 import ST3020Bus
-from hexapod.robot.config import Leg, Joint, LEGS, servo_id
+from hexapod.servo.transport import SerialTransport
 
 PORT = "/dev/ttyACM0"
 BAUDRATE = 1_000_000

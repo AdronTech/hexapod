@@ -50,19 +50,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import uvicorn
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+
 from hexapod.control import (
+    DEFAULT_CONFIG,
     ControlThread,
     SharedState,
     apply_config,
     load_config,
     save_config,
-    DEFAULT_CONFIG,
 )
 from hexapod.gait import _NEUTRAL_REACH
-
-import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
 
 DEFAULT_SERIAL_PORT = "/dev/ttyACM0"
 DEFAULT_HTTP_HOST = "0.0.0.0"

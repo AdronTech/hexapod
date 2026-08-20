@@ -1,18 +1,16 @@
 from dataclasses import dataclass
 
-from .transport import SerialTransport, TransportError
+from . import registers as R
 from .protocol import (
     ProtocolError,
-    StatusPacket,
     build_packet,
     build_sync_write,
-    parse_status_packet,
-    decode_word,
     decode_signed,
-    encode_signed,
+    decode_word,
     encode_word,
+    parse_status_packet,
 )
-from . import registers as R
+from .transport import SerialTransport, TransportError
 
 
 @dataclass

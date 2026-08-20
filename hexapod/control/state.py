@@ -5,12 +5,8 @@ Thread-safe shared state and configuration for the web controller.
 import json
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
 
 from hexapod.gait import _NEUTRAL_REACH
-
-if TYPE_CHECKING:
-    pass
 
 # ---------------------------------------------------------------------------
 # Tuning constants
@@ -115,7 +111,7 @@ class SharedState:
         self._pose: dict = {}
         self._message: str = "Waiting for serial connection…"
         # Pending command from the web UI (one-shot; cleared after reading)
-        self._pending_cmd: Optional[str] = None
+        self._pending_cmd: str | None = None
         self._gait_type: str = "tripod"
         self._ik_errors: int = 0
         self._last_ik_error: str = ""
@@ -202,7 +198,7 @@ class SharedState:
         with self._lock:
             self._pending_cmd = cmd
 
-    def pop_command(self) -> Optional[str]:
+    def pop_command(self) -> str | None:
         with self._lock:
             cmd = self._pending_cmd
             self._pending_cmd = None

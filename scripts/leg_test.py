@@ -33,24 +33,24 @@ Angles use the IK-friendly sign convention from docs/kinematics.md:
   tibia positive = tip swings outward
 """
 
-import sys
-import re
+import argparse
 import math
+import re
+import readline  # noqa: F401 — enables arrow-key history in input()
+import sys
+import termios
 import time
 import tty
-import termios
-import argparse
-import readline  # noqa: F401 — enables arrow-key history in input()
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from hexapod.servo.transport import SerialTransport, TransportError
+from hexapod.kinematics import IKError, angle_to_tick, leg_fk, leg_ik, tick_to_angle
+from hexapod.robot.config import Joint, Leg, servo_id
+from hexapod.robot.soft_limits import SoftLimitError, SoftLimits
 from hexapod.servo.protocol import ProtocolError
-from hexapod.servo.st3020 import ST3020Bus, PositionCommand
-from hexapod.robot.config import Leg, Joint, servo_id
-from hexapod.robot.soft_limits import SoftLimits, SoftLimitError
-from hexapod.kinematics import leg_ik, leg_fk, angle_to_tick, tick_to_angle, IKError
+from hexapod.servo.st3020 import PositionCommand, ST3020Bus
+from hexapod.servo.transport import SerialTransport, TransportError
 
 DEFAULT_ACC = 0
 DEFAULT_PORT = "/dev/ttyACM0"

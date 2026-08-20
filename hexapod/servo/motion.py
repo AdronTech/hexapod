@@ -1,6 +1,6 @@
 import time
 
-from .st3020 import ST3020Bus, PositionCommand
+from .st3020 import PositionCommand, ST3020Bus
 
 
 class MotionPlayer:
