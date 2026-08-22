@@ -26,9 +26,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import FileResponse
+from starlette.routing import Mount, Route, WebSocketRoute
+from starlette.staticfiles import StaticFiles
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from hexapod.robot.config import ALL_SERVO_IDS
 from hexapod.sim import SimulatorThread, VirtualBus
@@ -46,20 +49,15 @@ WEB_DIR = Path(__file__).parent / "sim_web"
 # ---------------------------------------------------------------------------
 
 
-def build_app(sim: SimulatorThread) -> FastAPI:
+def build_app(sim: SimulatorThread) -> Starlette:
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: Starlette):
         yield
 
-    app = FastAPI(lifespan=lifespan)
-    app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
-
-    @app.get("/")
-    async def index() -> FileResponse:
+    async def index(request: Request) -> FileResponse:
         return FileResponse(WEB_DIR / "index.html")
 
-    @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
         await ws.accept()
 
@@ -84,7 +82,14 @@ def build_app(sim: SimulatorThread) -> FastAPI:
         finally:
             send_task.cancel()
 
-    return app
+    return Starlette(
+        lifespan=lifespan,
+        routes=[
+            Route("/", index),
+            WebSocketRoute("/ws", ws_endpoint),
+            Mount("/static", StaticFiles(directory=WEB_DIR), name="static"),
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
